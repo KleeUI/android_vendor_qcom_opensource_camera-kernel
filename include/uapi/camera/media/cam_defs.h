@@ -11,6 +11,23 @@
 #include <linux/types.h>
 #include <linux/ioctl.h>
 
+/*
+ * Android 12's original 5.10 UAPI headers predate __DECLARE_FLEX_ARRAY.
+ * Keep the camera UAPI usable with that kernel while matching the layout
+ * provided by newer common-kernel headers.
+ */
+#ifndef __DECLARE_FLEX_ARRAY
+#ifdef __cplusplus
+#define __DECLARE_FLEX_ARRAY(TYPE, NAME) TYPE NAME[0]
+#else
+#define __DECLARE_FLEX_ARRAY(TYPE, NAME) \
+	struct { \
+		struct { } __empty_ ## NAME; \
+		TYPE NAME[]; \
+	}
+#endif
+#endif
+
 
 /* camera op codes */
 #define CAM_COMMON_OPCODE_BASE                  0x100
