@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
+ * Copyright (C) 2021 XiaoMi, Inc.
  */
 
 #include <linux/ratelimit.h>
@@ -456,7 +457,7 @@ static int cam_sfe_bus_start_rm(struct cam_isp_resource_node *rm_res)
 		rm_data->hw_regs->buf_width);
 	cam_io_w_mb(rm_data->height, common_data->mem_base +
 		rm_data->hw_regs->buf_height);
-	cam_io_w_mb(rm_data->stride, common_data->mem_base +
+	cam_io_w_mb(rm_data->width, common_data->mem_base +
 		rm_data->hw_regs->stride);
 	cam_io_w_mb(rm_data->unpacker_cfg, common_data->mem_base +
 		rm_data->hw_regs->unpacker_cfg);

@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (C) 2021 XiaoMi, Inc.
  */
 
 #ifndef _CAM_CDM_API_H_
@@ -151,10 +151,7 @@ struct cam_cdm_bl_request {
 	enum cam_cdm_bl_cmd_addr_type type;
 	uint32_t cmd_arrary_count;
 	uint64_t cookie;
-	union {
-	       struct cam_cdm_bl_cmd cmd[1];
-		__DECLARE_FLEX_ARRAY(struct cam_cdm_bl_cmd, cmd_flex);
-	};
+	struct cam_cdm_bl_cmd cmd[1];
 };
 
 /**
@@ -190,6 +187,18 @@ struct cam_cdm_bl_data {
 struct cam_cdm_bl_info {
 	int32_t bl_count;
 	struct cam_cdm_bl_data cmd[CAM_CDM_BL_CMD_MAX];
+};
+
+/**
+ * struct cam_cdm_bl_info
+ *
+ * @handle    : handle for the bl fifo client
+ * @module_id : module information of the hw.
+ *
+ */
+struct cam_cdm_handle_info {
+	uint32_t handle;
+	uint32_t module_id;
 };
 
 /**
@@ -327,10 +336,11 @@ struct cam_cdm_utils_ops *cam_cdm_publish_ops(void);
  *          this should be only performed only if the CDM is private.
  *
  * @handle : Input handle of the CDM to detect hang
+ * @module_id : Module id of the HW
  *
  * @return 0 on success
  */
-int cam_cdm_detect_hang_error(uint32_t handle);
+int cam_cdm_detect_hang_error(uint32_t handle, uint32_t module_id);
 
 /**
  * @brief : API to dump the CDM Debug registers

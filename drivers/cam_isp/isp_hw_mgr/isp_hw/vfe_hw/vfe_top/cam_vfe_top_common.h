@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2019-2021, The Linux Foundation. All rights reserved.
+ * Copyright (C) 2021 XiaoMi, Inc.
  */
 
 #ifndef _CAM_VFE_TOP_COMMON_H_
@@ -36,7 +37,7 @@ struct cam_vfe_top_priv_common {
 	struct cam_hw_soc_info         *soc_info;
 	unsigned long                   applied_clk_rate;
 	unsigned long                   req_clk_rate[CAM_VFE_TOP_MUX_MAX];
-	bool                            skip_data_rst_on_stop;
+	bool                            skip_clk_data_rst;
 
 };
 

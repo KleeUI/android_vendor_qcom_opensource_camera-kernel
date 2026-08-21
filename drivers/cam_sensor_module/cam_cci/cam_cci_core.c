@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (C) 2021 XiaoMi, Inc.
  */
 
 #include <linux/module.h>
@@ -663,11 +663,11 @@ static int32_t cam_cci_set_clk_param(struct cci_device *cci_dev,
 	if (i2c_freq_mode == cci_dev->i2c_freq_mode[master]) {
 		CAM_DBG(CAM_CCI, "CCI%d_I2C_M%d, curr_freq: %d", cci_dev->soc_info.index, master,
 			i2c_freq_mode);
-		mutex_lock(&cci_master->freq_cnt_lock);
+		spin_lock(&cci_master->freq_cnt_lock);
 		if (cci_master->freq_ref_cnt == 0)
 			down(&cci_master->master_sem);
 		cci_master->freq_ref_cnt++;
-		mutex_unlock(&cci_master->freq_cnt_lock);
+		spin_unlock(&cci_master->freq_cnt_lock);
 		mutex_unlock(&cci_master->mutex);
 		return 0;
 	}
@@ -675,9 +675,9 @@ static int32_t cam_cci_set_clk_param(struct cci_device *cci_dev,
 		cci_dev->soc_info.index, master, cci_dev->i2c_freq_mode[master], i2c_freq_mode);
 	down(&cci_master->master_sem);
 
-	mutex_lock(&cci_master->freq_cnt_lock);
+	spin_lock(&cci_master->freq_cnt_lock);
 	cci_master->freq_ref_cnt++;
-	mutex_unlock(&cci_master->freq_cnt_lock);
+	spin_unlock(&cci_master->freq_cnt_lock);
 
 	clk_params = &cci_dev->cci_clk_params[i2c_freq_mode];
 
@@ -736,7 +736,6 @@ static int32_t cam_cci_data_queue(struct cci_device *cci_dev,
 		&cci_dev->soc_info;
 	void __iomem *base = soc_info->reg_map[0].mem_base;
 	unsigned long flags;
-	uint8_t next_position = i2c_msg->data_type;
 
 	if (i2c_cmd == NULL) {
 		CAM_ERR(CAM_CCI, "CCI%d_I2C_M%d_Q%d Failed: i2c cmd is NULL",
@@ -881,62 +880,39 @@ static int32_t cam_cci_data_queue(struct cci_device *cci_dev,
 				if (c_ctrl->cmd == MSM_CCI_I2C_WRITE_SEQ)
 					reg_addr++;
 			} else {
-				if (i <= cci_dev->payload_size) {
+				if ((i + 1) <= cci_dev->payload_size) {
 					switch (i2c_msg->data_type) {
 					case CAMERA_SENSOR_I2C_TYPE_DWORD:
-						if (next_position >= i2c_msg->data_type)
-							data[i++] = (i2c_cmd->reg_data &
-								0xFF000000) >> 24;
-						if ((i-1) == MSM_CCI_WRITE_DATA_PAYLOAD_SIZE_11) {
-							next_position = CAMERA_SENSOR_I2C_TYPE_3B;
-							break;
-						}
-						fallthrough;
+						data[i++] = (i2c_cmd->reg_data &
+							0xFF000000) >> 24;
+						/* fallthrough */
 					case CAMERA_SENSOR_I2C_TYPE_3B:
-						if (next_position >= i2c_msg->data_type)
-							data[i++] = (i2c_cmd->reg_data &
-								0x00FF0000) >> 16;
-						if ((i-1) == MSM_CCI_WRITE_DATA_PAYLOAD_SIZE_11) {
-							next_position = CAMERA_SENSOR_I2C_TYPE_WORD;
-							break;
-						}
-						fallthrough;
+						data[i++] = (i2c_cmd->reg_data &
+							0x00FF0000) >> 16;
+						/* fallthrough */
 					case CAMERA_SENSOR_I2C_TYPE_WORD:
-						if (next_position >= i2c_msg->data_type)
-							data[i++] = (i2c_cmd->reg_data &
-								0x0000FF00) >> 8;
-						if ((i-1) == MSM_CCI_WRITE_DATA_PAYLOAD_SIZE_11) {
-							next_position = CAMERA_SENSOR_I2C_TYPE_BYTE;
-							break;
-						}
-						fallthrough;
+						data[i++] = (i2c_cmd->reg_data &
+							0x0000FF00) >> 8;
+						/* fallthrough */
 					case CAMERA_SENSOR_I2C_TYPE_BYTE:
 						data[i++] = i2c_cmd->reg_data &
 							0x000000FF;
-						if ((i-1) == MSM_CCI_WRITE_DATA_PAYLOAD_SIZE_11) {
-							next_position = i2c_msg->data_type;
-							break;
-						}
-						next_position = i2c_msg->data_type;
 						break;
 					default:
 						CAM_ERR(CAM_CCI,
 							"CCI%d_I2C_M%d_Q%d invalid data type: %d",
-							cci_dev->soc_info.index, master, queue,
-							i2c_msg->data_type);
+							cci_dev->soc_info.index, master, queue, i2c_msg->data_type);
 						return -EINVAL;
 					}
 
-					if (c_ctrl->cmd == MSM_CCI_I2C_WRITE_SEQ)
-						reg_addr += i2c_msg->data_type;
+					if (c_ctrl->cmd ==
+						MSM_CCI_I2C_WRITE_SEQ)
+						reg_addr++;
 				} else
 					break;
 			}
-			/* move to next cmd while all reg data bytes are filled */
-			if (next_position == i2c_msg->data_type) {
-				i2c_cmd++;
-				--cmd_size;
-			}
+			i2c_cmd++;
+			--cmd_size;
 		} while (((c_ctrl->cmd == MSM_CCI_I2C_WRITE_SEQ ||
 			c_ctrl->cmd == MSM_CCI_I2C_WRITE_BURST) || pack--) &&
 				(cmd_size > 0) && (i <= cci_dev->payload_size));
@@ -1283,10 +1259,10 @@ enable_irq:
 rel_mutex_q:
 	mutex_unlock(&cci_dev->cci_master_info[master].mutex_q[queue]);
 
-	mutex_lock(&cci_dev->cci_master_info[master].freq_cnt_lock);
+	spin_lock(&cci_dev->cci_master_info[master].freq_cnt_lock);
 	if (--cci_dev->cci_master_info[master].freq_ref_cnt == 0)
 		up(&cci_dev->cci_master_info[master].master_sem);
-	mutex_unlock(&cci_dev->cci_master_info[master].freq_cnt_lock);
+	spin_unlock(&cci_dev->cci_master_info[master].freq_cnt_lock);
 	return rc;
 }
 
@@ -1439,7 +1415,7 @@ static int32_t cam_cci_read(struct v4l2_subdev *sd,
 		val = cam_io_r_mb(base +
 			CCI_I2C_M0_READ_BUF_LEVEL_ADDR + master * 0x100);
 		CAM_ERR(CAM_CCI,
-			"CCI%d_I2C_M%d_Q%d rd_done wait timeout FIFO buf_lvl: 0x%x, rc: %d",
+			"CCI%d_I2C_M%d_Q%d wait timeout rd_done for cci: %d, master: %d, queue: %d, FIFO buf_lvl: 0x%x, rc: %d",
 			cci_dev->soc_info.index, master, queue, val, rc);
 		cam_cci_flush_queue(cci_dev, master);
 		goto rel_mutex_q;
@@ -1493,10 +1469,10 @@ static int32_t cam_cci_read(struct v4l2_subdev *sd,
 rel_mutex_q:
 	mutex_unlock(&cci_dev->cci_master_info[master].mutex_q[queue]);
 
-	mutex_lock(&cci_dev->cci_master_info[master].freq_cnt_lock);
+	spin_lock(&cci_dev->cci_master_info[master].freq_cnt_lock);
 	if (--cci_dev->cci_master_info[master].freq_ref_cnt == 0)
 		up(&cci_dev->cci_master_info[master].master_sem);
-	mutex_unlock(&cci_dev->cci_master_info[master].freq_cnt_lock);
+	spin_unlock(&cci_dev->cci_master_info[master].freq_cnt_lock);
 	return rc;
 }
 
@@ -1556,10 +1532,10 @@ static int32_t cam_cci_i2c_write(struct v4l2_subdev *sd,
 	}
 
 ERROR:
-	mutex_lock(&cci_dev->cci_master_info[master].freq_cnt_lock);
+	spin_lock(&cci_dev->cci_master_info[master].freq_cnt_lock);
 	if (--cci_dev->cci_master_info[master].freq_ref_cnt == 0)
 		up(&cci_dev->cci_master_info[master].master_sem);
-	mutex_unlock(&cci_dev->cci_master_info[master].freq_cnt_lock);
+	spin_unlock(&cci_dev->cci_master_info[master].freq_cnt_lock);
 	return rc;
 }
 
@@ -1935,8 +1911,8 @@ int32_t cam_cci_core_cfg(struct v4l2_subdev *sd,
 		return -EINVAL;
 	}
 
-	if (!cci_ctrl || !cci_ctrl->cci_info) {
-		CAM_ERR(CAM_CCI, "CCI%d_I2C_M%d CCI_CTRL OR CCI_INFO IS NULL", cci_dev->soc_info.index, master);
+	if (!cci_ctrl) {
+		CAM_ERR(CAM_CCI, "CCI%d_I2C_M%d CCI_CTRL IS NULL", cci_dev->soc_info.index, master);
 		return -EINVAL;
 	}
 
@@ -1968,12 +1944,20 @@ int32_t cam_cci_core_cfg(struct v4l2_subdev *sd,
 		 * CCI version 1.2 does not support burst read
 		 * due to the absence of the read threshold register
 		 */
+		mutex_lock(&cci_dev->init_mutex);
 		if (cci_dev->hw_version == CCI_VERSION_1_2_9) {
 			CAM_DBG(CAM_CCI, "cci-v1.2 no burst read");
 			rc = cam_cci_read_bytes_v_1_2(sd, cci_ctrl);
 		} else {
 			rc = cam_cci_read_bytes(sd, cci_ctrl);
 		}
+		if (rc < 0) {
+			CAM_ERR(CAM_CCI, "cam cci err %d , read, slav 0x%x on dev/master %d/%d",
+				rc, cci_ctrl->cci_info->sid << 1,
+				cci_ctrl->cci_info->cci_device,
+				cci_ctrl->cci_info->cci_i2c_master);
+		}
+        mutex_unlock(&cci_dev->init_mutex);
 		break;
 	case MSM_CCI_I2C_WRITE:
 	case MSM_CCI_I2C_WRITE_SEQ:
@@ -1981,7 +1965,16 @@ int32_t cam_cci_core_cfg(struct v4l2_subdev *sd,
 	case MSM_CCI_I2C_WRITE_SYNC:
 	case MSM_CCI_I2C_WRITE_ASYNC:
 	case MSM_CCI_I2C_WRITE_SYNC_BLOCK:
+		mutex_lock(&cci_dev->init_mutex);
 		rc = cam_cci_write(sd, cci_ctrl);
+		if (rc < 0) {
+			CAM_ERR(CAM_CCI, "cam cci err %d , write type %d , slav 0x%x on dev/master %d/%d",
+				rc, cci_ctrl->cmd,
+				cci_ctrl->cci_info->sid << 1,
+				cci_ctrl->cci_info->cci_device,
+				cci_ctrl->cci_info->cci_i2c_master);
+            }
+            mutex_unlock(&cci_dev->init_mutex);
 		break;
 	case MSM_CCI_GPIO_WRITE:
 		break;
@@ -1994,6 +1987,10 @@ int32_t cam_cci_core_cfg(struct v4l2_subdev *sd,
 	}
 
 	cci_ctrl->status = rc;
+
+	/* xiaomi add hw trigger - begin */
+	CAM_DEBUG_HW_TRIGGER(rc < 0, CAM_CCI, "rc: %d", rc);
+	/* xiaomi add hw trigger - end   */
 
 	return rc;
 }

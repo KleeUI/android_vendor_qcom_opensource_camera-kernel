@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2014-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (C) 2021 XiaoMi, Inc.
  */
 
 #include <linux/module.h>
@@ -16,6 +16,7 @@
 #include <linux/workqueue.h>
 #include <linux/genalloc.h>
 #include <linux/debugfs.h>
+#include <linux/dma-iommu.h>
 
 #include <soc/qcom/secure_buffer.h>
 
@@ -318,7 +319,7 @@ static struct cam_dma_buff_info *cam_smmu_find_mapping_by_virt_address(int idx,
 static int cam_smmu_map_buffer_and_add_to_list(int idx, int ion_fd,
 	bool dis_delayed_unmap, enum dma_data_direction dma_dir,
 	dma_addr_t *paddr_ptr, size_t *len_ptr,
-	enum cam_smmu_region_id region_id, bool is_internal, struct dma_buf *dmabuf);
+	enum cam_smmu_region_id region_id, bool is_internal);
 
 static int cam_smmu_map_kernel_buffer_and_add_to_list(int idx,
 	struct dma_buf *buf, enum dma_data_direction dma_dir,
@@ -1526,11 +1527,11 @@ int cam_smmu_alloc_firmware(int32_t smmu_hdl,
 	 * But on chipsets which use dma-coherent - all the buffers that are
 	 * being mapped to this CB must be CACHED
 	 */
-	rc = cam_iommu_map(domain,
-	firmware_start,
-	(phys_addr_t) icp_fw.fw_hdl,
-	firmware_len,
-	IOMMU_READ|IOMMU_WRITE|IOMMU_PRIV);
+	rc = iommu_map(domain,
+		firmware_start,
+		(phys_addr_t) icp_fw.fw_hdl,
+		firmware_len,
+		IOMMU_READ|IOMMU_WRITE|IOMMU_PRIV);
 
 	if (rc) {
 		CAM_ERR(CAM_SMMU, "Failed to map FW into IOMMU");
@@ -1674,7 +1675,7 @@ int cam_smmu_alloc_qdss(int32_t smmu_hdl,
 	 * But on chipsets which use dma-coherent - all the buffers that are
 	 * being mapped to this CB must be CACHED
 	 */
-	rc = cam_iommu_map(domain,
+	rc = iommu_map(domain,
 		qdss_start,
 		qdss_phy_addr,
 		qdss_len,
@@ -1984,7 +1985,7 @@ int cam_smmu_reserve_buf_region(enum cam_smmu_region_id region,
 		goto err_put;
 	}
 
-	buf_info->table = cam_compat_dmabuf_map_attach(buf_info->attach,
+	buf_info->table = dma_buf_map_attachment(buf_info->attach,
 		DMA_BIDIRECTIONAL);
 	if (IS_ERR_OR_NULL(buf_info->table)) {
 		rc = PTR_ERR(buf_info->table);
@@ -1996,7 +1997,7 @@ int cam_smmu_reserve_buf_region(enum cam_smmu_region_id region,
 	if (iommu_cb_set.force_cache_allocs)
 		prot |= IOMMU_CACHE;
 
-	size = cam_iommu_map_sg(cb_info->domain,
+	size = iommu_map_sg(cb_info->domain,
 		region_info->iova_start,
 		buf_info->table->sgl,
 		buf_info->table->orig_nents,
@@ -2016,7 +2017,7 @@ int cam_smmu_reserve_buf_region(enum cam_smmu_region_id region,
 	return rc;
 
 err_unmap_sg:
-	cam_compat_dmabuf_unmap_attach(buf_info->attach,
+	dma_buf_unmap_attachment(buf_info->attach,
 		buf_info->table,
 		DMA_BIDIRECTIONAL);
 err_detach:
@@ -2097,7 +2098,7 @@ int cam_smmu_release_buf_region(enum cam_smmu_region_id region,
 			region_info->iova_len);
 	}
 
-	cam_compat_dmabuf_unmap_attach(buf_info->attach,
+	dma_buf_unmap_attachment(buf_info->attach,
 		buf_info->table, DMA_BIDIRECTIONAL);
 	dma_buf_detach(buf_info->buf, buf_info->attach);
 	dma_buf_put(buf_info->buf);
@@ -2143,11 +2144,11 @@ static int cam_smmu_map_buffer_validate(struct dma_buf *buf,
 	if (IS_ERR_OR_NULL(attach)) {
 		rc = PTR_ERR(attach);
 		CAM_ERR(CAM_SMMU, "Error: dma buf attach failed");
-		goto err_out;
+		goto err_put;
 	}
 
 	if (region_id == CAM_SMMU_REGION_SHARED) {
-		table = cam_compat_dmabuf_map_attach(attach, dma_dir);
+		table = dma_buf_map_attachment(attach, dma_dir);
 		if (IS_ERR_OR_NULL(table)) {
 			rc = PTR_ERR(table);
 			CAM_ERR(CAM_SMMU, "Error: dma map attachment failed");
@@ -2174,7 +2175,7 @@ static int cam_smmu_map_buffer_validate(struct dma_buf *buf,
 		if (iommu_cb_set.force_cache_allocs)
 			prot |= IOMMU_CACHE;
 
-		size = cam_iommu_map_sg(domain, iova, table->sgl, table->orig_nents,
+		size = iommu_map_sg(domain, iova, table->sgl, table->orig_nents,
 				prot);
 
 		if (size < 0) {
@@ -2197,7 +2198,7 @@ static int cam_smmu_map_buffer_validate(struct dma_buf *buf,
 		if (!dis_delayed_unmap)
 			attach->dma_map_attrs |= DMA_ATTR_DELAYED_UNMAP;
 
-		table = cam_compat_dmabuf_map_attach(attach, dma_dir);
+		table = dma_buf_map_attachment(attach, dma_dir);
 		if (IS_ERR_OR_NULL(table)) {
 			rc = PTR_ERR(table);
 			CAM_ERR(CAM_SMMU,
@@ -2265,14 +2266,14 @@ static int cam_smmu_map_buffer_validate(struct dma_buf *buf,
 		goto err_alloc;
 	}
 
-	CAM_DBG(CAM_SMMU, "idx=%d, dma_buf=%pK, dev=%pOFfp, paddr=0x%llx, len=%zu",
+	CAM_DBG(CAM_SMMU, "idx=%d, dma_buf=%pK, dev=%pK, paddr=0x%llx, len=%zu",
 		idx, buf,
 		iommu_cb_set.cb_info[idx].dev->of_node,
 		*paddr_ptr, *len_ptr);
 
 	/* Unmap the mapping in dma region as this is not used anyway */
 	if (region_id == CAM_SMMU_REGION_SHARED)
-		cam_compat_dmabuf_unmap_attach(attach, table, dma_dir);
+		dma_buf_unmap_attachment(attach, table, dma_dir);
 
 	return 0;
 
@@ -2287,9 +2288,11 @@ err_alloc:
 			*len_ptr);
 	}
 err_unmap_sg:
-	cam_compat_dmabuf_unmap_attach(attach, table, dma_dir);
+	dma_buf_unmap_attachment(attach, table, dma_dir);
 err_detach:
 	dma_buf_detach(buf, attach);
+err_put:
+	dma_buf_put(buf);
 err_out:
 	return rc;
 }
@@ -2298,10 +2301,14 @@ err_out:
 static int cam_smmu_map_buffer_and_add_to_list(int idx, int ion_fd,
 	bool dis_delayed_unmap, enum dma_data_direction dma_dir,
 	dma_addr_t *paddr_ptr, size_t *len_ptr,
-	enum cam_smmu_region_id region_id, bool is_internal, struct dma_buf *buf)
+	enum cam_smmu_region_id region_id, bool is_internal)
 {
 	int rc = -1;
 	struct cam_dma_buff_info *mapping_info = NULL;
+	struct dma_buf *buf = NULL;
+
+	/* returns the dma_buf structure related to an fd */
+	buf = dma_buf_get(ion_fd);
 
 	rc = cam_smmu_map_buffer_validate(buf, idx, dma_dir, paddr_ptr, len_ptr,
 		region_id, dis_delayed_unmap, &mapping_info);
@@ -2426,13 +2433,14 @@ static int cam_smmu_unmap_buf_and_remove_from_list(
 			mapping_info->attach->dma_map_attrs |=
 				DMA_ATTR_SKIP_CPU_SYNC;
 
-		cam_compat_dmabuf_unmap_attach(mapping_info->attach,
+		dma_buf_unmap_attachment(mapping_info->attach,
 			mapping_info->table, mapping_info->dir);
 		iommu_cb_set.cb_info[idx].io_mapping_size -= mapping_info->len;
 	}
 
 
 	dma_buf_detach(mapping_info->buf, mapping_info->attach);
+	dma_buf_put(mapping_info->buf);
 
 	if (iommu_cb_set.map_profile_enable) {
 		CAM_GET_TIMESTAMP(ts2);
@@ -2688,7 +2696,7 @@ static int cam_smmu_alloc_scratch_buffer_add_to_list(int idx,
 	if (iommu_cb_set.force_cache_allocs)
 		iommu_dir |= IOMMU_CACHE;
 
-	if (cam_iommu_map_sg(domain,
+	if (iommu_map_sg(domain,
 		iova,
 		table->sgl,
 		table->nents,
@@ -2945,9 +2953,10 @@ handle_err:
 
 static int cam_smmu_map_stage2_buffer_and_add_to_list(int idx, int ion_fd,
 		 enum dma_data_direction dma_dir, dma_addr_t *paddr_ptr,
-		 size_t *len_ptr, struct dma_buf *dmabuf)
+		 size_t *len_ptr)
 {
 	int rc = 0;
+	struct dma_buf *dmabuf = NULL;
 	struct dma_buf_attachment *attach = NULL;
 	struct sg_table *table = NULL;
 	struct cam_sec_buff_info *mapping_info;
@@ -2955,6 +2964,15 @@ static int cam_smmu_map_stage2_buffer_and_add_to_list(int idx, int ion_fd,
 	/* clean the content from clients */
 	*paddr_ptr = (dma_addr_t)NULL;
 	*len_ptr = (size_t)0;
+
+	dmabuf = dma_buf_get(ion_fd);
+	if (IS_ERR_OR_NULL((void *)(dmabuf))) {
+		CAM_ERR(CAM_SMMU,
+			"Error: dma buf get failed, idx=%d, ion_fd=%d",
+			idx, ion_fd);
+		rc = PTR_ERR(dmabuf);
+		goto err_out;
+	}
 
 	/*
 	 * ion_phys() is deprecated. call dma_buf_attach() and
@@ -2967,12 +2985,12 @@ static int cam_smmu_map_stage2_buffer_and_add_to_list(int idx, int ion_fd,
 			"Error: dma buf attach failed, idx=%d, ion_fd=%d",
 			idx, ion_fd);
 		rc = PTR_ERR(attach);
-		goto err_out;
+		goto err_put;
 	}
 
 	attach->dma_map_attrs |= DMA_ATTR_SKIP_CPU_SYNC;
 
-	table = cam_compat_dmabuf_map_attach(attach, dma_dir);
+	table = dma_buf_map_attachment(attach, dma_dir);
 	if (IS_ERR_OR_NULL(table)) {
 		CAM_ERR(CAM_SMMU, "Error: dma buf map attachment failed");
 		rc = PTR_ERR(table);
@@ -3011,9 +3029,11 @@ static int cam_smmu_map_stage2_buffer_and_add_to_list(int idx, int ion_fd,
 	return 0;
 
 err_unmap_sg:
-	cam_compat_dmabuf_unmap_attach(attach, table, dma_dir);
+	dma_buf_unmap_attachment(attach, table, dma_dir);
 err_detach:
 	dma_buf_detach(dmabuf, attach);
+err_put:
+	dma_buf_put(dmabuf);
 err_out:
 	return rc;
 }
@@ -3078,7 +3098,7 @@ int cam_smmu_map_stage2_iova(int handle, int ion_fd, struct dma_buf *dmabuf,
 		goto get_addr_end;
 	}
 	rc = cam_smmu_map_stage2_buffer_and_add_to_list(idx, ion_fd, dma_dir,
-			paddr_ptr, len_ptr, dmabuf);
+			paddr_ptr, len_ptr);
 	if (rc < 0) {
 		CAM_ERR(CAM_SMMU,
 			"Error: mapping or add list fail, idx=%d, handle=%d, fd=%d, rc=%d",
@@ -3111,9 +3131,10 @@ static int cam_smmu_secure_unmap_buf_and_remove_from_list(
 	mapping_info->attach->dma_map_attrs |= DMA_ATTR_SKIP_CPU_SYNC;
 
 	/* iommu buffer clean up */
-	cam_compat_dmabuf_unmap_attach(mapping_info->attach,
+	dma_buf_unmap_attachment(mapping_info->attach,
 		mapping_info->table, mapping_info->dir);
 	dma_buf_detach(mapping_info->buf, mapping_info->attach);
+	dma_buf_put(mapping_info->buf);
 	mapping_info->buf = NULL;
 
 	list_del_init(&mapping_info->list);
@@ -3303,7 +3324,7 @@ int cam_smmu_map_user_iova(int handle, int ion_fd, struct dma_buf *dmabuf,
 
 	rc = cam_smmu_map_buffer_and_add_to_list(idx, ion_fd,
 		dis_delayed_unmap, dma_dir, paddr_ptr, len_ptr,
-		region_id, is_internal, dmabuf);
+		region_id, is_internal);
 	if (rc < 0) {
 		CAM_ERR(CAM_SMMU,
 			"mapping or add list fail cb:%s idx=%d, fd=%d, region=%d, rc=%d",
@@ -3843,9 +3864,11 @@ static int cam_smmu_setup_cb(struct cam_context_bank_info *cb,
 			goto end;
 		}
 
-		/* Enable custom iommu features, if applicable */
-		cam_smmu_util_iommu_custom(dev, cb->discard_iova_start,
-			cb->discard_iova_len);
+		iommu_dma_enable_best_fit_algo(dev);
+
+		if (cb->discard_iova_start)
+			iommu_dma_reserve_iova(dev, cb->discard_iova_start,
+				cb->discard_iova_len);
 
 		cb->state = CAM_SMMU_ATTACH;
 	} else {
@@ -3965,10 +3988,6 @@ static int cam_smmu_get_memory_regions_info(struct device_node *of_node,
 	int rc = 0;
 	struct device_node *mem_map_node = NULL;
 	struct device_node *child_node = NULL;
-	dma_addr_t region_start = 0;
-	size_t region_len = 0;
-	uint32_t region_id;
-	uint32_t qdss_region_phy_addr;
 	const char *region_name;
 	int num_regions = 0;
 
@@ -3992,10 +4011,12 @@ static int cam_smmu_get_memory_regions_info(struct device_node *of_node,
 	}
 
 	for_each_available_child_of_node(mem_map_node, child_node) {
-		qdss_region_phy_addr = 0;
+		uint32_t region_start;
+		uint32_t region_len;
+		uint32_t region_id;
+		uint32_t qdss_region_phy_addr = 0;
 
 		num_regions++;
-
 		rc = of_property_read_string(child_node,
 			"iova-region-name", &region_name);
 		if (rc < 0) {
@@ -4004,40 +4025,24 @@ static int cam_smmu_get_memory_regions_info(struct device_node *of_node,
 			return -EINVAL;
 		}
 
-		if (iommu_cb_set.is_expanded_memory) {
-			rc = of_property_read_u64(child_node, "iova-region-start", &region_start);
-			if (rc < 0) {
-				of_node_put(mem_map_node);
-				CAM_ERR(CAM_SMMU, "Failed to read iova-region-start");
-				return -EINVAL;
-			}
-
-			rc = of_property_read_u64(child_node, "iova-region-len",
-				(uint64_t *)&region_len);
-			if (rc < 0) {
-				of_node_put(mem_map_node);
-				CAM_ERR(CAM_SMMU, "Failed to read iova-region-len");
-				return -EINVAL;
-			}
-		} else {
-			rc = of_property_read_u32(child_node, "iova-region-start",
-				(uint32_t *)&region_start);
-			if (rc < 0) {
-				of_node_put(mem_map_node);
-				CAM_ERR(CAM_SMMU, "Failed to read iova-region-start");
-				return -EINVAL;
-			}
-
-			rc = of_property_read_u32(child_node, "iova-region-len",
-				(uint32_t *)&region_len);
-			if (rc < 0) {
-				of_node_put(mem_map_node);
-				CAM_ERR(CAM_SMMU, "Failed to read iova-region-len");
-				return -EINVAL;
-			}
+		rc = of_property_read_u32(child_node,
+			"iova-region-start", &region_start);
+		if (rc < 0) {
+			of_node_put(mem_map_node);
+			CAM_ERR(CAM_SMMU, "Failed to read iova-region-start");
+			return -EINVAL;
 		}
 
-		rc = of_property_read_u32(child_node, "iova-region-id", &region_id);
+		rc = of_property_read_u32(child_node,
+			"iova-region-len", &region_len);
+		if (rc < 0) {
+			of_node_put(mem_map_node);
+			CAM_ERR(CAM_SMMU, "Failed to read iova-region-len");
+			return -EINVAL;
+		}
+
+		rc = of_property_read_u32(child_node,
+			"iova-region-id", &region_id);
 		if (rc < 0) {
 			of_node_put(mem_map_node);
 			CAM_ERR(CAM_SMMU, "Failed to read iova-region-id");
@@ -4439,10 +4444,16 @@ static int cam_smmu_create_debug_fs(void)
 	/* Store parent inode for cleanup in caller */
 	iommu_cb_set.dentry = dbgfileptr;
 
-	debugfs_create_bool("cb_dump_enable", 0644,
+	dbgfileptr = debugfs_create_bool("cb_dump_enable", 0644,
 		iommu_cb_set.dentry, &iommu_cb_set.cb_dump_enable);
-	debugfs_create_bool("map_profile_enable", 0644,
+	dbgfileptr = debugfs_create_bool("map_profile_enable", 0644,
 		iommu_cb_set.dentry, &iommu_cb_set.map_profile_enable);
+	if (IS_ERR(dbgfileptr)) {
+		if (PTR_ERR(dbgfileptr) == -ENODEV)
+			CAM_WARN(CAM_SMMU, "DebugFS not enabled in kernel!");
+		else
+			rc = PTR_ERR(dbgfileptr);
+	}
 end:
 	return rc;
 }

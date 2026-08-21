@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
+ * Copyright (C) 2021 XiaoMi, Inc.
  */
 
 #include <linux/slab.h>
@@ -637,7 +638,6 @@ static int cam_sfe_top_get_base(
 	uint32_t                          mem_base = 0;
 	struct cam_isp_hw_get_cmd_update *cdm_args  = cmd_args;
 	struct cam_cdm_utils_ops         *cdm_util_ops = NULL;
-	struct cam_sfe_soc_private       *soc_private;
 
 	if (arg_size != sizeof(struct cam_isp_hw_get_cmd_update)) {
 		CAM_ERR(CAM_SFE, "Invalid cmd size");
@@ -647,12 +647,6 @@ static int cam_sfe_top_get_base(
 	if (!cdm_args || !cdm_args->res || !top_priv ||
 		!top_priv->common_data.soc_info) {
 		CAM_ERR(CAM_SFE, "Invalid args");
-		return -EINVAL;
-	}
-
-	soc_private = top_priv->common_data.soc_info->soc_private;
-	if (!soc_private) {
-		CAM_ERR(CAM_ISP, "soc_private is null");
 		return -EINVAL;
 	}
 
@@ -675,19 +669,17 @@ static int cam_sfe_top_get_base(
 		top_priv->common_data.soc_info,
 		SFE_CORE_BASE_IDX);
 
-	if (cdm_args->cdm_id == CAM_CDM_RT) {
-		if (!soc_private->rt_wrapper_base) {
-			CAM_ERR(CAM_ISP, "rt_wrapper_base_addr is null");
-			return -EINVAL;
-		}
-		mem_base -= soc_private->rt_wrapper_base;
-	}
+	if (cdm_args->cdm_id == CAM_CDM_RT)
+		mem_base -= CAM_SOC_GET_REG_MAP_CAM_BASE(
+			top_priv->common_data.soc_info,
+			SFE_RT_CDM_BASE_IDX);
 
 	CAM_DBG(CAM_SFE, "core %d mem_base 0x%x, CDM Id: %d",
 		top_priv->common_data.soc_info->index, mem_base,
 		cdm_args->cdm_id);
 
-	cdm_util_ops->cdm_write_changebase(cdm_args->cmd.cmd_buf_addr, mem_base);
+	cdm_util_ops->cdm_write_changebase(
+	cdm_args->cmd.cmd_buf_addr, mem_base);
 	cdm_args->cmd.used_bytes = (size * 4);
 
 	return 0;
@@ -763,7 +755,7 @@ static int cam_sfe_top_handle_overflow(
 {
 	struct cam_sfe_top_common_data      *common_data;
 	struct cam_hw_soc_info              *soc_info;
-	uint32_t                             overflow_status, violation_status, tmp;
+	uint32_t                             overflow_status, violation_status;
 	uint32_t                             i = 0;
 
 	common_data = &top_priv->common_data;
@@ -774,26 +766,21 @@ static int cam_sfe_top_handle_overflow(
 	violation_status = cam_io_r(soc_info->reg_map[SFE_CORE_BASE_IDX].mem_base +
 		top_priv->common_data.common_reg->ipp_violation_status);
 
-	CAM_ERR(CAM_ISP,
+	CAM_ERR_RATE_LIMIT(CAM_ISP,
 		"SFE%d src_clk_rate:%luHz overflow:%s violation: %s",
 		soc_info->index, soc_info->applied_src_clk_rate,
 		CAM_BOOL_TO_YESNO(overflow_status), CAM_BOOL_TO_YESNO(violation_status));
 
-	tmp = overflow_status;
-	while (tmp) {
-		if (tmp & 0x1)
+	while (overflow_status) {
+		if (overflow_status & 0x1)
 			CAM_ERR(CAM_ISP, "SFE Overflow %s ",
 				top_priv->wr_client_desc[i].desc);
-		tmp = tmp >> 1;
+		overflow_status = overflow_status >> 1;
 		i++;
 	}
 
-	if (violation_status)
-		cam_sfe_top_print_ipp_violation_info(top_priv, violation_status);
+	cam_sfe_top_print_ipp_violation_info(top_priv, violation_status);
 	cam_sfe_top_print_debug_reg_info(top_priv);
-
-	if (overflow_status)
-		cam_cpas_log_votes();
 
 	return 0;
 }

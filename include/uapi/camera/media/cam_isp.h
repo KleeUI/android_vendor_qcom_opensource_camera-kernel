@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only WITH Linux-syscall-note */
 /*
  * Copyright (c) 2016-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (C) 2021 XiaoMi, Inc.
  */
 
 #ifndef __UAPI_CAM_ISP_H__
@@ -125,7 +125,6 @@
 #define CAM_ISP_GENERIC_BLOB_TYPE_BW_LIMITER_CFG            16
 #define CAM_ISP_GENERIC_BLOB_TYPE_FPS_CONFIG                17
 #define CAM_ISP_GENERIC_BLOB_TYPE_INIT_CONFIG               18
-#define CAM_ISP_GENERIC_BLOB_TYPE_RDI_LCR_CONFIG            19
 #define CAM_ISP_GENERIC_BLOB_TYPE_SFE_CLOCK_CONFIG          21
 #define CAM_ISP_GENERIC_BLOB_TYPE_SFE_CORE_CONFIG           22
 #define CAM_ISP_GENERIC_BLOB_TYPE_SFE_OUT_CONFIG            23
@@ -343,10 +342,7 @@ struct cam_isp_in_port_info {
 	__u32                        hbi_cnt;
 	__u32                        reserved;
 	__u32                        num_out_res;
-	union {
-		struct cam_isp_out_port_info data[1];
-		__DECLARE_FLEX_ARRAY(struct cam_isp_out_port_info, data_flex);
-	};
+	struct cam_isp_out_port_info data[1];
 };
 
 /**
@@ -430,10 +426,7 @@ struct cam_isp_in_port_info_v2 {
 	__u32                           feature_flag;
 	__u32                           ife_res_1;
 	__u32                           ife_res_2;
-	union {
-		struct cam_isp_out_port_info_v2 data[1];
-		__DECLARE_FLEX_ARRAY(struct cam_isp_out_port_info_v2, data_flex);
-	};
+	struct cam_isp_out_port_info_v2 data[1];
 };
 
 /**
@@ -488,10 +481,7 @@ struct cam_isp_port_hfr_config {
 struct cam_isp_resource_hfr_config {
 	__u32                          num_ports;
 	__u32                          reserved;
-	union {
-		struct cam_isp_port_hfr_config port_hfr_config[1];
-		__DECLARE_FLEX_ARRAY(struct cam_isp_port_hfr_config, port_hfr_config_flex);
-	};
+	struct cam_isp_port_hfr_config port_hfr_config[1];
 } __attribute__((packed));
 
 /**
@@ -547,10 +537,7 @@ struct cam_isp_dual_config {
 	__u32                             num_ports;
 	__u32                             reserved;
 	struct cam_isp_dual_split_params  split_params;
-	union {
-		struct cam_isp_dual_stripe_config stripes[1];
-		__DECLARE_FLEX_ARRAY(struct cam_isp_dual_stripe_config, stripes_flex);
-	};
+	struct cam_isp_dual_stripe_config stripes[1];
 } __attribute__((packed));
 
 /**
@@ -570,10 +557,7 @@ struct cam_isp_clock_config {
 	__u32                       num_rdi;
 	__u64                       left_pix_hz;
 	__u64                       right_pix_hz;
-	union {
-		__u64                   rdi_hz[1];
-		__DECLARE_FLEX_ARRAY(__u64, rdi_hz_flex);
-	};
+	__u64                       rdi_hz[1];
 } __attribute__((packed));
 
 /**
@@ -623,10 +607,7 @@ struct cam_isp_bw_config {
 	__u32                       num_rdi;
 	struct cam_isp_bw_vote      left_pix_vote;
 	struct cam_isp_bw_vote      right_pix_vote;
-	union {
-		struct cam_isp_bw_vote      rdi_vote[1];
-		__DECLARE_FLEX_ARRAY(struct cam_isp_bw_vote, rdi_vote_flex);
-	};
+	struct cam_isp_bw_vote      rdi_vote[1];
 } __attribute__((packed));
 
 /**
@@ -639,10 +620,7 @@ struct cam_isp_bw_config {
 struct cam_isp_bw_config_v2 {
 	__u32                             usage_type;
 	__u32                             num_paths;
-	union {
-		struct cam_axi_per_path_bw_vote   axi_path[1];
-		__DECLARE_FLEX_ARRAY(struct cam_axi_per_path_bw_vote, axi_path_flex);
-	};
+	struct cam_axi_per_path_bw_vote   axi_path[1];
 } __attribute__((packed));
 
 /**
@@ -810,10 +788,7 @@ struct cam_isp_sfe_scratch_buf_info {
 struct cam_isp_sfe_init_scratch_buf_config {
 	__u32  num_ports;
 	__u32  reserved;
-	union {
-		struct cam_isp_sfe_scratch_buf_info port_scratch_cfg[1];
-		__DECLARE_FLEX_ARRAY(struct cam_isp_sfe_scratch_buf_info, port_scratch_cfg_flex);
-	};
+	struct cam_isp_sfe_scratch_buf_info port_scratch_cfg[1];
 };
 
 /**
@@ -909,10 +884,7 @@ struct cam_isp_vfe_wm_config {
 struct cam_isp_vfe_out_config {
 	__u32                        num_ports;
 	__u32                        reserved;
-	union {
-		struct cam_isp_vfe_wm_config wm_config[1];
-		__DECLARE_FLEX_ARRAY(struct cam_isp_vfe_wm_config, wm_config_flex);
-	};
+	struct cam_isp_vfe_wm_config wm_config[1];
 };
 
 /**
@@ -957,10 +929,7 @@ struct cam_isp_sfe_wm_exp_order_config {
 struct cam_isp_sfe_exp_config {
 	__u32                                   num_ports;
 	__u32                                   reserved;
-	union {
-		struct cam_isp_sfe_wm_exp_order_config  wm_config[1];
-		__DECLARE_FLEX_ARRAY(struct cam_isp_sfe_wm_exp_order_config, wm_config_flex);
-	};
+	struct cam_isp_sfe_wm_exp_order_config  wm_config[1];
 };
 
 /**
@@ -1009,10 +978,7 @@ struct cam_isp_wm_bw_limiter_config {
 struct cam_isp_out_rsrc_bw_limiter_config {
 	__u32                                   num_ports;
 	__u32                                   reserved;
-	union {
-		struct cam_isp_wm_bw_limiter_config     bw_limiter_config[1];
-		__DECLARE_FLEX_ARRAY(struct cam_isp_wm_bw_limiter_config, bw_limiter_config_flex);
-	};
+	struct cam_isp_wm_bw_limiter_config     bw_limiter_config[1];
 };
 
 /**
@@ -1035,32 +1001,6 @@ struct cam_isp_init_config {
 	} epoch_cfg;
 
 	__u32             additional_params[19];
-};
-
-/**
- * struct cam_isp_lcr_rdi_config - RDI res id to be muxed to LCR
- *
- *    Configure RDI Res id for LCR
- *
- * @res_id                   : Out port Res id, it is same as the out port
- *                             configured during acquire. It would vary
- *                             as per SFE or IFE. Based on this res id,
- *                             Mux register in IFE will be programmed.
- *                             Examples:
- *                             IFE:
- *                             CAM_ISP_IFE_OUT_RES_RDI_0
- *                             SFE:
- *                             CAM_ISP_SFE_OUT_RES_RDI_0
- *                             This blob is expected as a part of init packet for
- *                             all LCR cases. For SHDR-LCR cases, this can be used
- *                             per request. For non-shdr cases, this blob is not
- *                             expected as the input to LCR will remain same throughout
- *                             the session
- * @reserved                 : Reserved field
- */
-struct cam_isp_lcr_rdi_config {
-	__u32                                   res_id;
-	__u32                                   reserved[5];
 };
 
 #define CAM_ISP_ACQUIRE_COMMON_VER0         0x1000

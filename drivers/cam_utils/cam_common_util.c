@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (C) 2021 XiaoMi, Inc.
  */
 
 #include <linux/string.h>
@@ -15,7 +15,6 @@
 #include "cam_common_util.h"
 #include "cam_debug_util.h"
 #include "cam_presil_hw_access.h"
-#include "cam_hw.h"
 #if IS_REACHABLE(CONFIG_QCOM_VA_MINIDUMP)
 #include <soc/qcom/minidump.h>
 static  struct cam_common_mini_dump_dev_info g_minidump_dev_info;
@@ -260,113 +259,3 @@ end:
 	return rc;
 }
 #endif
-
-void *cam_common_user_dump_clock(
-	void *dump_struct, uint8_t *addr_ptr)
-{
-	struct cam_hw_info  *hw_info = NULL;
-	uint64_t            *addr = NULL;
-
-	hw_info = (struct cam_hw_info *)dump_struct;
-
-	if (!hw_info || !addr_ptr) {
-		CAM_ERR(CAM_ISP, "HW info or address pointer NULL");
-		return addr;
-	}
-
-	addr = (uint64_t *)addr_ptr;
-	*addr++ = hw_info->soc_info.applied_src_clk_rate;
-	return addr;
-}
-
-int cam_common_user_dump_helper(
-	void *cmd_args,
-	void *(*func)(void *dump_struct, uint8_t *addr_ptr),
-	void *dump_struct,
-	size_t size,
-	const char *tag, ...)
-{
-
-	uint8_t                                   *dst;
-	uint8_t                                   *addr, *start;
-	void                                      *returned_ptr;
-	struct cam_common_hw_dump_args            *dump_args;
-	struct cam_common_hw_dump_header          *hdr;
-	va_list                                    args;
-	void*(*func_ptr)(void *dump_struct, uint8_t *addr_ptr);
-
-	dump_args = (struct cam_common_hw_dump_args *)cmd_args;
-	if (!dump_args->cpu_addr || !dump_args->buf_len) {
-		CAM_ERR(CAM_UTIL,
-			"Invalid params %pK %zu",
-			(void *)dump_args->cpu_addr,
-			dump_args->buf_len);
-		return -EINVAL;
-	}
-	if (dump_args->buf_len <= dump_args->offset) {
-		CAM_WARN(CAM_UTIL,
-			"Dump offset overshoot offset %zu buf_len %zu",
-			dump_args->offset, dump_args->buf_len);
-		return -ENOSPC;
-	}
-
-	dst = (uint8_t *)dump_args->cpu_addr + dump_args->offset;
-	hdr = (struct cam_common_hw_dump_header *)dst;
-
-	va_start(args, tag);
-	vscnprintf(hdr->tag, CAM_COMMON_HW_DUMP_TAG_MAX_LEN, tag, args);
-	va_end(args);
-
-	hdr->word_size = size;
-
-	addr = (uint8_t *)(dst + sizeof(struct cam_common_hw_dump_header));
-	start = addr;
-
-	func_ptr = func;
-	returned_ptr = func_ptr(dump_struct, addr);
-
-	if (IS_ERR(returned_ptr))
-		return PTR_ERR(returned_ptr);
-
-	addr = (uint8_t *)returned_ptr;
-	hdr->size = addr - start;
-	CAM_DBG(CAM_UTIL, "hdr size: %d, word size: %d, addr: %x, start: %x",
-		hdr->size, hdr->word_size, addr, start);
-	dump_args->offset += hdr->size +
-		sizeof(struct cam_common_hw_dump_header);
-
-	return 0;
-}
-
-int cam_common_mem_kdup(void **dst,
-	void *src, size_t size)
-{
-	gfp_t flag = GFP_KERNEL;
-
-	if (!src || !dst || !size) {
-		CAM_ERR(CAM_UTIL, "Invalid params src: %pK dst: %pK size: %u",
-			src, dst, size);
-		return -EINVAL;
-	}
-
-	if (!in_task())
-		flag = GFP_ATOMIC;
-
-	*dst = kvzalloc(size, flag);
-	if (!*dst) {
-		CAM_ERR(CAM_UTIL, "Failed to allocate memory with size: %u", size);
-		return -ENOMEM;
-	}
-
-	memcpy(*dst, src, size);
-	CAM_DBG(CAM_UTIL, "Allocate and copy memory with size: %u", size);
-
-	return 0;
-}
-EXPORT_SYMBOL(cam_common_mem_kdup);
-
-void cam_common_mem_free(void *memory)
-{
-	kvfree(memory);
-}
-EXPORT_SYMBOL(cam_common_mem_free);

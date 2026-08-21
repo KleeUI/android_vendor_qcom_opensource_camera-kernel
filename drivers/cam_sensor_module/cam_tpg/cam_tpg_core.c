@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #include "cam_tpg_core.h"
@@ -422,7 +421,6 @@ static int cam_tpg_validate_cmd_descriptor(
 
 	*cmd_addr = (uintptr_t)cmd_header;
 end:
-	cam_mem_put_cpu_buf(cmd_desc->mem_handle);
 	return rc;
 }
 
@@ -436,18 +434,12 @@ static int cam_tpg_cmd_buf_parse(
 	if (!tpg_dev || !packet)
 		return -EINVAL;
 
-	if (!packet->num_cmd_buf) {
-		CAM_ERR(CAM_TPG, "Invalid num_cmd_buffer = %d",
-			packet->num_cmd_buf);
-		return -EINVAL;
-	}
-
 	for (i = 0; i < packet->num_cmd_buf; i++) {
 		uint32_t cmd_type = TPG_CMD_TYPE_INVALID;
 		uintptr_t cmd_addr;
 
 		cmd_desc = (struct cam_cmd_buf_desc *)
-			((uint32_t *)&packet->payload_flex +
+			((uint32_t *)&packet->payload +
 			(packet->cmd_buf_offset / 4) +
 			(i * (sizeof(struct cam_cmd_buf_desc)/4)));
 
@@ -569,7 +561,6 @@ static int cam_tpg_packet_parse(
 		break;
 	}
 end:
-	cam_mem_put_cpu_buf(config->packet_handle);
 	return rc;
 }
 

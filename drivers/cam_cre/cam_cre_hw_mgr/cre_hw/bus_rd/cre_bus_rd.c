@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
- * Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
+ * Copyright (C) 2021 XiaoMi, Inc.
  */
 #include <linux/delay.h>
 #include "cam_hw.h"
@@ -139,11 +139,6 @@ static int cam_cre_bus_rd_update(struct cam_cre_hw *cam_cre_hw_info,
 	in_port_idx =
 	cam_cre_bus_rd_in_port_idx(io_buf->resource_type);
 
-	if (in_port_idx < 0 || in_port_idx >= MAX_CRE_RD_CLIENTS) {
-		CAM_ERR(CAM_CRE, "Invalid in_port_idx for resource %d", io_buf->resource_type);
-		return -EINVAL;
-	}
-
 	CAM_DBG(CAM_CRE, "in_port_idx %d", in_port_idx);
 	for (k = 0; k < io_buf->num_planes; k++) {
 		rd_reg_client = &rd_reg->rd_clients[in_port_idx];
@@ -229,7 +224,7 @@ static int cam_cre_bus_rd_prepare(struct cam_cre_hw *cam_cre_hw_info,
 	struct cre_io_buf *io_buf;
 	struct cam_cre_bus_rd_reg *rd_reg;
 	struct cam_cre_bus_rd_reg_val *rd_reg_val;
-	struct cre_reg_buffer *cre_reg_buf = NULL;
+	struct cre_reg_buffer *cre_reg_buf;
 
 	int val;
 
@@ -273,12 +268,11 @@ static int cam_cre_bus_rd_prepare(struct cam_cre_hw *cam_cre_hw_info,
 			rd_reg->offset + rd_reg->input_if_cmd,
 			val);
 	}
-	if (cre_reg_buf) {
-		for (i = 0; i < cre_reg_buf->num_rd_reg_set; i++) {
-			CAM_DBG(CAM_CRE, "CRE value 0x%x offset 0x%x",
-					cre_reg_buf->rd_reg_set[i].value,
-					cre_reg_buf->rd_reg_set[i].offset);
-		}
+
+	for (i = 0; i < cre_reg_buf->num_rd_reg_set; i++) {
+		CAM_DBG(CAM_CRE, "CRE value 0x%x offset 0x%x",
+				cre_reg_buf->rd_reg_set[i].value,
+				cre_reg_buf->rd_reg_set[i].offset);
 	}
 end:
 	return 0;

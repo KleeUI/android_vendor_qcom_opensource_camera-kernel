@@ -1,7 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2015-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _CAM_SOC_UTIL_H_
@@ -17,7 +16,6 @@
 #include <linux/platform_device.h>
 #include <linux/i2c.h>
 #include <linux/regulator/consumer.h>
-#include <linux/pinctrl/consumer.h>
 #include <linux/debugfs.h>
 #include <linux/of_fdt.h>
 
@@ -155,7 +153,6 @@ struct cam_soc_gpio_data {
  * @irq_name:               Name of the irq associated with the device
  * @label_name:             label name
  * @irq_line:               Irq resource
- * @irq_num:                Irq number
  * @irq_data:               Private data that is passed when IRQ is requested
  * @compatible:             Compatible string associated with the device
  * @num_mem_block:          Number of entry in the "reg-names"
@@ -209,8 +206,6 @@ struct cam_soc_gpio_data {
  * @cam_cx_ipeak_enable     cx-ipeak enable/disable flag
  * @cam_cx_ipeak_bit        cx-ipeak mask for driver
  * @soc_private:            Soc private data
- * @aggregate_clk:          Aggregate clk group info
- * @aggregate_clk_mask:     Mask indicating which of the clocks are aggregated
  */
 struct cam_hw_soc_info {
 	struct platform_device         *pdev;
@@ -222,7 +217,6 @@ struct cam_hw_soc_info {
 	const char                     *irq_name;
 	const char                     *label_name;
 	struct resource                *irq_line;
-	int                             irq_num;
 	void                           *irq_data;
 	const char                     *compatible;
 
@@ -276,10 +270,6 @@ struct cam_hw_soc_info {
 	int32_t                         cam_cx_ipeak_bit;
 
 	void                           *soc_private;
-
-	int32_t                         aggregate_clk[CAM_SOC_MAX_CLK][2];
-	uint32_t                        aggregate_clk_mask;
-
 };
 
 /**
@@ -560,18 +550,6 @@ int cam_soc_util_clk_disable(struct cam_hw_soc_info *soc_info,
 	bool optional_clk, int32_t clk_idx);
 
 /**
- * cam_soc_util_dump_clk()
- *
- * @brief:              Dumps all the clocks of the caller hw, using
- *                      clock api.
- *
- * @soc_info:           Device soc information
- * @return:             Success or failure
- */
-
-int cam_soc_util_dump_clk(struct cam_hw_soc_info *soc_info);
-
-/**
  * cam_soc_util_irq_enable()
  *
  * @brief:              Enable IRQ in SOC
@@ -743,10 +721,6 @@ int cam_soc_util_clk_enable_default(struct cam_hw_soc_info *soc_info,
 int cam_soc_util_get_clk_level(struct cam_hw_soc_info *soc_info,
 	int64_t clk_rate, int clk_idx, int32_t *clk_lvl);
 
-unsigned long cam_soc_util_get_clk_rate_applied(
-	struct cam_hw_soc_info *soc_info, int32_t index, bool is_src,
-	enum cam_vote_level clk_level);
-
 /* Callback to get reg space data for specific HW */
 typedef int (*cam_soc_util_regspace_data_cb)(uint32_t reg_base_type,
 	void *ctx, struct cam_hw_soc_info **soc_info_ptr,
@@ -766,15 +740,13 @@ typedef int (*cam_soc_util_regspace_data_cb)(uint32_t reg_base_type,
  * @soc_dump_args:         Dump buffer args to dump the soc information.
  * @user_triggered_dump:   Flag to indicate if the dump request is issued by
  *                         user.
- * @cpu_addr:              cpu address of buffer
- * @size:                  size of buffer
  * @return:                Success or Failure
  */
 int cam_soc_util_reg_dump_to_cmd_buf(void *ctx,
 	struct cam_cmd_buf_desc *cmd_desc, uint64_t req_id,
 	cam_soc_util_regspace_data_cb reg_data_cb,
 	struct cam_hw_soc_dump_args *soc_dump_args,
-	bool user_triggered_dump, uintptr_t cpu_addr, size_t buf_size);
+	bool user_triggered_dump);
 
 /**
  * cam_soc_util_print_clk_freq()

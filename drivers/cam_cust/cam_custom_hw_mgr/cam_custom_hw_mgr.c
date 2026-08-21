@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2019-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024  Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (C) 2021 XiaoMi, Inc.
  */
 
 #include <linux/slab.h>
@@ -149,16 +149,6 @@ enum cam_isp_resource_type
 		return CAM_ISP_RESOURCE_PIX_PATH;
 	default:
 		return CAM_ISP_RESOURCE_MAX;
-	}
-}
-
-static void cam_custom_mgr_count_functional_hws(uint32_t *num_custom_functional)
-{
-	int i;
-
-	for (i = 0; i < CAM_CUSTOM_CSID_HW_MAX; i++) {
-		if (g_custom_hw_mgr.custom_hw[i])
-			(*num_custom_functional)++;
 	}
 }
 
@@ -994,8 +984,8 @@ static int cam_custom_hw_mgr_acquire_get_unified_dev_str(
 	}
 
 	for (i = 0; i < in->num_out_res; i++) {
-		port_info->data[i].res_type     = in->data_flex[i].res_type;
-		port_info->data[i].format       = in->data_flex[i].format;
+		port_info->data[i].res_type     = in->data[i].res_type;
+		port_info->data[i].format       = in->data[i].format;
 	}
 
 	*gen_port_info = port_info;
@@ -1143,7 +1133,7 @@ static int cam_custom_add_io_buffers(
 	bool                                is_buf_secure;
 
 	io_cfg = (struct cam_buf_io_cfg *)((uint8_t *)
-			&prepare->packet->payload_flex +
+			&prepare->packet->payload +
 			prepare->packet->io_configs_offset);
 	prepare_hw_data =
 			(struct cam_custom_prepare_hw_update_data *)
@@ -1267,7 +1257,7 @@ static int cam_custom_mgr_prepare_hw_update(void *hw_mgr_priv,
 
 	/* Test purposes-check the data in cmd buffer */
 	cmd_desc = (struct cam_cmd_buf_desc *)
-		((uint8_t *)&prepare->packet->payload_flex +
+		((uint8_t *)&prepare->packet->payload +
 		prepare->packet->cmd_buf_offset);
 	rc = cam_packet_util_get_cmd_mem_addr(
 			cmd_desc->mem_handle, &ptr, &len);
@@ -1285,7 +1275,6 @@ static int cam_custom_mgr_prepare_hw_update(void *hw_mgr_priv,
 	ctx->scratch_buffer_addr = 0x0;
 	prepare_hw_data->num_cfg = 0;
 	cam_custom_add_io_buffers(hw_mgr->img_iommu_hdl, prepare);
-	cam_mem_put_cpu_buf(cmd_desc->mem_handle);
 	return 0;
 }
 
@@ -1485,7 +1474,6 @@ int cam_custom_hw_mgr_init(struct device_node *of_node,
 	int rc = 0;
 	int i, j;
 	struct cam_custom_hw_mgr_ctx *ctx_pool;
-	uint32_t num_custom_available, num_custom_functional = 0;
 
 	memset(&g_custom_hw_mgr, 0, sizeof(g_custom_hw_mgr));
 	mutex_init(&g_custom_hw_mgr.ctx_mutex);
@@ -1563,13 +1551,6 @@ int cam_custom_hw_mgr_init(struct device_node *of_node,
 
 	if (iommu_hdl)
 		*iommu_hdl = g_custom_hw_mgr.img_iommu_hdl;
-
-	cam_custom_get_num_hws(&num_custom_available);
-	cam_custom_mgr_count_functional_hws(&num_custom_functional);
-	rc = cam_cpas_prepare_subpart_info(CAM_CUSTOM_HW_IDX, num_custom_available,
-		num_custom_functional);
-	if (rc)
-		CAM_ERR(CAM_CUSTOM, "Failed to populate num_custom, rc: %d", rc);
 
 	CAM_DBG(CAM_CUSTOM, "HW manager initialized");
 	return 0;

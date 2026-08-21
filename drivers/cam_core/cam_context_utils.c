@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (C) 2021 XiaoMi, Inc.
  */
 
 #include <linux/debugfs.h>
@@ -36,45 +36,20 @@ static inline int cam_context_validate_thread(void)
 
 static void cam_context_free_mem_hw_entries(struct cam_context *ctx)
 {
-	int  i;
-
-	if (ctx->out_map_entries) {
-		for (i = 0; i < ctx->req_size; i++) {
-			kfree(ctx->out_map_entries[i]);
-			ctx->out_map_entries[i] = NULL;
-		}
-
-		kfree(ctx->out_map_entries);
-		ctx->out_map_entries = NULL;
-	}
-
-	if (ctx->in_map_entries) {
-		for (i = 0; i < ctx->req_size; i++) {
-			kfree(ctx->in_map_entries[i]);
-			ctx->in_map_entries[i] = NULL;
-		}
-
-		kfree(ctx->in_map_entries);
-		ctx->in_map_entries = NULL;
-	}
-
-	if (ctx->hw_update_entry) {
-		for (i = 0; i < ctx->req_size; i++) {
-			kfree(ctx->hw_update_entry[i]);
-			ctx->hw_update_entry[i] = NULL;
-		}
-
-		kfree(ctx->hw_update_entry);
-		ctx->hw_update_entry = NULL;
-	}
+	kfree(ctx->out_map_entries);
+	kfree(ctx->in_map_entries);
+	kfree(ctx->hw_update_entry);
+	ctx->out_map_entries = NULL;
+	ctx->in_map_entries = NULL;
+	ctx->hw_update_entry = NULL;
 }
 
 static int cam_context_allocate_mem_hw_entries(struct cam_context *ctx)
 {
 	int rc = 0;
-	unsigned int i;
 	struct cam_ctx_request          *req;
 	struct cam_ctx_request          *temp_req;
+	size_t num_entries = 0;
 
 	CAM_DBG(CAM_CTXT,
 		"%s[%d] num: max_hw %u in_map %u out_map %u req %u",
@@ -85,75 +60,47 @@ static int cam_context_allocate_mem_hw_entries(struct cam_context *ctx)
 		ctx->max_out_map_entries,
 		ctx->req_size);
 
-	ctx->hw_update_entry = kcalloc(ctx->req_size,
-		sizeof(struct cam_hw_update_entry *), GFP_KERNEL);
+	num_entries = ctx->max_hw_update_entries * ctx->req_size;
+	ctx->hw_update_entry = kcalloc(num_entries,
+		sizeof(struct cam_hw_update_entry),
+		GFP_KERNEL);
 
 	if (!ctx->hw_update_entry) {
-		CAM_ERR(CAM_CTXT, "%s[%d] no memory for hw_update_entry",
-			ctx->dev_name, ctx->ctx_id);
+		CAM_ERR(CAM_CTXT, "%s[%d] no memory", ctx->dev_name, ctx->ctx_id);
+		rc = -ENOMEM;
 		return -ENOMEM;
 	}
 
-	for (i = 0; i < ctx->req_size; i++) {
-		ctx->hw_update_entry[i] = kcalloc(ctx->max_hw_update_entries,
-			sizeof(struct cam_hw_update_entry), GFP_KERNEL);
-
-		if (!ctx->hw_update_entry[i]) {
-			CAM_ERR(CAM_CTXT, "%s[%d] no memory for hw_update_entry: %u",
-				ctx->dev_name, ctx->ctx_id, i);
-			rc = -ENOMEM;
-			goto free_mem;
-		}
-	}
-
-	ctx->in_map_entries = kcalloc(ctx->req_size, sizeof(struct cam_hw_fence_map_entry *),
+	num_entries = ctx->max_in_map_entries * ctx->req_size;
+	ctx->in_map_entries = kcalloc(num_entries,
+		sizeof(struct cam_hw_fence_map_entry),
 		GFP_KERNEL);
 
 	if (!ctx->in_map_entries) {
-		CAM_ERR(CAM_CTXT, "%s[%d] no memory for in_map_entries",
-			ctx->dev_name, ctx->ctx_id);
+		CAM_ERR(CAM_CTXT, "%s[%d] no memory", ctx->dev_name, ctx->ctx_id);
 		rc = -ENOMEM;
 		goto free_mem;
 	}
 
-	for (i = 0; i < ctx->req_size; i++) {
-		ctx->in_map_entries[i] = kcalloc(ctx->max_in_map_entries,
-			sizeof(struct cam_hw_fence_map_entry), GFP_KERNEL);
+	num_entries = ctx->max_out_map_entries * ctx->req_size;
 
-		if (!ctx->in_map_entries[i]) {
-			CAM_ERR(CAM_CTXT, "%s[%d] no memory for in_map_entries: %u",
-				ctx->dev_name, ctx->ctx_id, i);
-			rc = -ENOMEM;
-			goto free_mem;
-		}
-	}
-
-	ctx->out_map_entries = kcalloc(ctx->req_size, sizeof(struct cam_hw_fence_map_entry *),
+	ctx->out_map_entries = kcalloc(num_entries,
+		sizeof(struct cam_hw_fence_map_entry),
 		GFP_KERNEL);
-
 	if (!ctx->out_map_entries) {
-		CAM_ERR(CAM_CTXT, "%s[%d] no memory for out_map_entries",
-			ctx->dev_name, ctx->ctx_id);
-		rc = -ENOMEM;
+		CAM_ERR(CAM_CTXT, "%s[%d] no memory", ctx->dev_name, ctx->ctx_id);
 		goto free_mem;
 	}
 
-	for (i = 0; i < ctx->req_size; i++) {
-		ctx->out_map_entries[i] = kcalloc(ctx->max_out_map_entries,
-			sizeof(struct cam_hw_fence_map_entry), GFP_KERNEL);
+	list_for_each_entry_safe(req, temp_req,
+		&ctx->free_req_list, list) {
 
-		if (!ctx->out_map_entries[i]) {
-			CAM_ERR(CAM_CTXT, "%s[%d] no memory for out_map_entries: %u",
-				ctx->dev_name, ctx->ctx_id, i);
-			rc = -ENOMEM;
-			goto free_mem;
-		}
-	}
-
-	list_for_each_entry_safe(req, temp_req, &ctx->free_req_list, list) {
-		req->hw_update_entries = ctx->hw_update_entry[req->index];
-		req->in_map_entries = ctx->in_map_entries[req->index];
-		req->out_map_entries = ctx->out_map_entries[req->index];
+		req->hw_update_entries =
+			&ctx->hw_update_entry[req->index * ctx->max_hw_update_entries];
+		req->in_map_entries =
+			&ctx->in_map_entries[req->index * ctx->max_in_map_entries];
+		req->out_map_entries =
+			&ctx->out_map_entries[req->index * ctx->max_out_map_entries];
 	}
 
 	return rc;
@@ -461,7 +408,6 @@ int32_t cam_context_config_dev_to_hw(
 		rc = -EFAULT;
 	}
 
-	cam_mem_put_cpu_buf((int32_t) cmd->packet_handle);
 	return rc;
 }
 
@@ -750,9 +696,8 @@ int32_t cam_context_flush_ctx_to_hw(struct cam_context *ctx)
 {
 	struct cam_hw_flush_args flush_args;
 	struct list_head temp_list;
-	struct list_head *list;
 	struct cam_ctx_request *req;
-	uint32_t i, num_entries = 0;
+	uint32_t i;
 	int rc = 0;
 	bool free_req;
 
@@ -777,30 +722,18 @@ int32_t cam_context_flush_ctx_to_hw(struct cam_context *ctx)
 
 	flush_args.num_req_pending = 0;
 	flush_args.last_flush_req = ctx->last_flush_req;
-	list_for_each(list, &temp_list) {
-		num_entries++;
-	}
-	if (num_entries) {
-		flush_args.flush_req_pending =
-			kcalloc(num_entries, sizeof(void *), GFP_KERNEL);
-		if (!flush_args.flush_req_pending) {
-			CAM_ERR(CAM_CTXT, "[%s][%d] : Flush array memory alloc fail",
-				ctx->dev_name, ctx->ctx_id);
-			mutex_unlock(&ctx->sync_mutex);
-			rc = -ENOMEM;
-			goto end;
-		}
-	}
-
-	while (num_entries) {
-
-		if (list_empty(&temp_list))
+	while (true) {
+		spin_lock(&ctx->lock);
+		if (list_empty(&temp_list)) {
+			spin_unlock(&ctx->lock);
 			break;
+		}
 
 		req = list_first_entry(&temp_list,
 				struct cam_ctx_request, list);
 
 		list_del_init(&req->list);
+		spin_unlock(&ctx->lock);
 		req->flushed = 1;
 
 		flush_args.flush_req_pending[flush_args.num_req_pending++] =
@@ -854,32 +787,14 @@ int32_t cam_context_flush_ctx_to_hw(struct cam_context *ctx)
 	}
 	mutex_unlock(&ctx->sync_mutex);
 
-	INIT_LIST_HEAD(&temp_list);
-	spin_lock(&ctx->lock);
-	list_splice_init(&ctx->active_req_list, &temp_list);
-	spin_unlock(&ctx->lock);
-
 	if (ctx->hw_mgr_intf->hw_flush) {
 		flush_args.num_req_active = 0;
-		num_entries = 0;
-		list_for_each(list, &temp_list) {
-			num_entries++;
+		spin_lock(&ctx->lock);
+		list_for_each_entry(req, &ctx->active_req_list, list) {
+			flush_args.flush_req_active[flush_args.num_req_active++]
+				= req->req_priv;
 		}
-		if (num_entries) {
-			flush_args.flush_req_active =
-				kcalloc(num_entries, sizeof(void *), GFP_KERNEL);
-			if (!flush_args.flush_req_active) {
-				CAM_ERR(CAM_CTXT, "[%s][%d] : Flush array memory alloc fail",
-					ctx->dev_name, ctx->ctx_id);
-				rc = -ENOMEM;
-				goto end;
-			}
-
-			list_for_each_entry(req, &temp_list, list) {
-				flush_args.flush_req_active[flush_args.num_req_active++] =
-					req->req_priv;
-			}
-		}
+		spin_unlock(&ctx->lock);
 
 		if (flush_args.num_req_pending || flush_args.num_req_active) {
 			flush_args.ctxt_to_hw_map = ctx->ctxt_to_hw_map;
@@ -889,19 +804,27 @@ int32_t cam_context_flush_ctx_to_hw(struct cam_context *ctx)
 		}
 	}
 
+	INIT_LIST_HEAD(&temp_list);
+	spin_lock(&ctx->lock);
+	list_splice_init(&ctx->active_req_list, &temp_list);
+	INIT_LIST_HEAD(&ctx->active_req_list);
+	spin_unlock(&ctx->lock);
+
 	if (cam_debug_ctx_req_list & ctx->dev_id)
 		CAM_INFO(CAM_CTXT,
 			"[%s][%d] : Moving all requests from active_list to temp_list",
 			ctx->dev_name, ctx->ctx_id);
 
-	while (num_entries) {
-
-		if (list_empty(&temp_list))
+	while (true) {
+		spin_lock(&ctx->lock);
+		if (list_empty(&temp_list)) {
+			spin_unlock(&ctx->lock);
 			break;
-
+		}
 		req = list_first_entry(&temp_list,
 			struct cam_ctx_request, list);
 		list_del_init(&req->list);
+		spin_unlock(&ctx->lock);
 
 		for (i = 0; i < req->num_out_map_entries; i++) {
 			if (req->out_map_entries[i].sync_id != -1) {
@@ -932,13 +855,9 @@ int32_t cam_context_flush_ctx_to_hw(struct cam_context *ctx)
 				ctx->dev_name, ctx->ctx_id, req->request_id);
 	}
 
-	rc = 0;
 	CAM_DBG(CAM_CTXT, "[%s] X: NRT flush ctx", ctx->dev_name);
 
-end:
-	kfree(flush_args.flush_req_active);
-	kfree(flush_args.flush_req_pending);
-	return rc;
+	return 0;
 }
 
 int32_t cam_context_flush_req_to_hw(struct cam_context *ctx,
@@ -946,7 +865,7 @@ int32_t cam_context_flush_req_to_hw(struct cam_context *ctx,
 {
 	struct cam_ctx_request *req = NULL;
 	struct cam_hw_flush_args flush_args;
-	uint32_t i = 0;
+	uint32_t i;
 	int32_t sync_id = 0;
 	int rc = 0;
 	bool free_req = false;
@@ -956,13 +875,6 @@ int32_t cam_context_flush_req_to_hw(struct cam_context *ctx,
 	memset(&flush_args, 0, sizeof(flush_args));
 	flush_args.num_req_pending = 0;
 	flush_args.num_req_active = 0;
-	flush_args.flush_req_pending = kzalloc(sizeof(void *), GFP_KERNEL);
-	if (!flush_args.flush_req_pending) {
-		CAM_ERR(CAM_CTXT, "[%s][%d] : Flush array memory alloc fail",
-			ctx->dev_name, ctx->ctx_id);
-		rc = -ENOMEM;
-		goto end;
-	}
 	mutex_lock(&ctx->sync_mutex);
 	spin_lock(&ctx->lock);
 	list_for_each_entry(req, &ctx->pending_req_list, list) {
@@ -986,13 +898,6 @@ int32_t cam_context_flush_req_to_hw(struct cam_context *ctx,
 
 	if (ctx->hw_mgr_intf->hw_flush) {
 		if (!flush_args.num_req_pending) {
-			flush_args.flush_req_active = kzalloc(sizeof(void *), GFP_KERNEL);
-			if (!flush_args.flush_req_active) {
-				CAM_ERR(CAM_CTXT, "[%s][%d] : Flush array memory alloc fail",
-					ctx->dev_name, ctx->ctx_id);
-				rc = -ENOMEM;
-				goto end;
-			}
 			spin_lock(&ctx->lock);
 			list_for_each_entry(req, &ctx->active_req_list, list) {
 				if (req->request_id != cmd->req_id)
@@ -1066,14 +971,9 @@ int32_t cam_context_flush_req_to_hw(struct cam_context *ctx,
 			}
 		}
 	}
-
-	rc = 0;
 	CAM_DBG(CAM_CTXT, "[%s] X: NRT flush req", ctx->dev_name);
 
-end:
-	kfree(flush_args.flush_req_active);
-	kfree(flush_args.flush_req_pending);
-	return rc;
+	return 0;
 }
 
 int32_t cam_context_flush_dev_to_hw(struct cam_context *ctx,
@@ -1301,7 +1201,6 @@ static int cam_context_dump_context(struct cam_context *ctx,
 	if (dump_args->offset >= buf_len) {
 		CAM_WARN(CAM_CTXT, "dump buffer overshoot offset %zu len %zu",
 			dump_args->offset, buf_len);
-		cam_mem_put_cpu_buf(dump_args->buf_handle);
 		return -ENOSPC;
 	}
 
@@ -1313,7 +1212,6 @@ static int cam_context_dump_context(struct cam_context *ctx,
 	if (remain_len < min_len) {
 		CAM_WARN(CAM_CTXT, "dump buffer exhaust remain %zu min %u",
 			remain_len, min_len);
-		cam_mem_put_cpu_buf(dump_args->buf_handle);
 		return -ENOSPC;
 	}
 	dst = (uint8_t *)cpu_addr + dump_args->offset;
@@ -1338,8 +1236,7 @@ static int cam_context_dump_context(struct cam_context *ctx,
 	hdr->size = hdr->word_size * (addr - start);
 	dump_args->offset += hdr->size +
 		sizeof(struct cam_context_dump_header);
-	cam_mem_put_cpu_buf(dump_args->buf_handle);
-	return 0;
+	return rc;
 }
 
 int32_t cam_context_dump_dev_to_hw(struct cam_context *ctx,
@@ -1400,7 +1297,8 @@ size_t cam_context_parse_config_cmd(struct cam_context *ctx, struct cam_config_d
 
 	if (!ctx || !cmd || !packet) {
 		CAM_ERR(CAM_CTXT, "invalid args");
-		return  -EINVAL;
+		rc = -EINVAL;
+		goto err;
 	}
 
 	/* for config dev, only memory handle is supported */
@@ -1409,7 +1307,8 @@ size_t cam_context_parse_config_cmd(struct cam_context *ctx, struct cam_config_d
 	if (rc != 0) {
 		CAM_ERR(CAM_CTXT, "[%s][%d] Can not get packet address for handle:%llx",
 			ctx->dev_name, ctx->ctx_id, cmd->packet_handle);
-		return  -EINVAL;
+		rc = -EINVAL;
+		goto err;
 	}
 
 	if ((len < sizeof(struct cam_packet)) ||
@@ -1427,14 +1326,12 @@ size_t cam_context_parse_config_cmd(struct cam_context *ctx, struct cam_config_d
 		cmd->packet_handle, packet_addr, cmd->offset, len, (*packet)->header.request_id,
 		(*packet)->header.size, (*packet)->header.op_code);
 
-	cam_mem_put_cpu_buf((int32_t) cmd->packet_handle);
 	return (len - (size_t)cmd->offset);
 
 err:
 	if (packet)
 		*packet = ERR_PTR(rc);
-	if (cmd)
-		cam_mem_put_cpu_buf((int32_t) cmd->packet_handle);
+
 	return 0;
 }
 
@@ -1488,19 +1385,19 @@ static void __cam_context_req_mini_dump(struct cam_ctx_request *req,
 	}
 
 	packet = (struct cam_packet *)req->pf_data.packet;
-
 	if (packet && packet->num_io_configs) {
 		bytes_required = packet->num_io_configs * sizeof(struct cam_buf_io_cfg);
 		if (start_addr + bytes_written + bytes_required > end_addr)
 			goto end;
 
-		io_cfg = (struct cam_buf_io_cfg *)((uint32_t *)&packet->payload_flex +
+		io_cfg = (struct cam_buf_io_cfg *)((uint32_t *)&packet->payload +
 			    packet->io_configs_offset / 4);
 		req_md->io_cfg = (struct cam_buf_io_cfg *)(start_addr + bytes_written);
 		memcpy(req_md->io_cfg, io_cfg, bytes_required);
 		bytes_written += bytes_required;
 		req_md->num_io_cfg = packet->num_io_configs;
 	}
+
 end:
 	*bytes_updated = bytes_written;
 }

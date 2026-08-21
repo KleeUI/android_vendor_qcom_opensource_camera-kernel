@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (C) 2021 XiaoMi, Inc.
  */
 
 #include <linux/device.h>
@@ -17,6 +17,8 @@
 #include "cam_cpas_hw_intf.h"
 #include "cam_cpas_hw.h"
 #include "cam_cpas_soc.h"
+
+#define LLCC_RETRY 5
 
 static uint cpas_dump;
 module_param(cpas_dump, uint, 0644);
@@ -230,8 +232,6 @@ static int cam_cpas_parse_node_tree(struct cam_cpas *cpas_core,
 		if (!level_node)
 			continue;
 
-		CAM_DBG(CAM_CPAS, "Parsing level %d nodes", level_idx);
-
 		camnoc_max_needed = of_property_read_bool(level_node,
 			"camnoc-max-needed");
 		for_each_available_child_of_node(level_node, curr_node) {
@@ -248,9 +248,6 @@ static int cam_cpas_parse_node_tree(struct cam_cpas *cpas_core,
 				CAM_ERR(CAM_CPAS, "Node index not found");
 				return rc;
 			}
-
-			CAM_DBG(CAM_CPAS, "Parsing Node with cell index %d",
-					curr_node_ptr->cell_idx);
 
 			if (curr_node_ptr->cell_idx >=
 				CAM_CPAS_MAX_TREE_NODES) {
@@ -338,85 +335,64 @@ static int cam_cpas_parse_node_tree(struct cam_cpas *cpas_core,
 					= mnoc_node;
 				if (soc_private->bus_icc_based) {
 					struct of_phandle_args src_args = {0},
-					dst_args = {0};
-					if (soc_private->use_cam_icc_path_str)
-						count = of_property_count_strings(mnoc_node,
-						"cam-icc-path-names");
-					else
-						count = of_property_count_strings(mnoc_node,
-						"interconnect-names");
-					if (count <= 0) {
-						CAM_ERR(CAM_ISP, "Missing icc info for\
-								camera bus nodes count: %d", count);
+						dst_args = {0};
+
+					rc = of_property_read_string(mnoc_node,
+						"interconnect-names",
+						&cpas_core->axi_port[mnoc_idx]
+						.bus_client.common_data.name);
+					if (rc) {
+						CAM_ERR(CAM_CPAS,
+							"failed to read interconnect-names rc=%d",
+							rc);
+						return rc;
+					}
+
+					rc = of_parse_phandle_with_args(
+						mnoc_node, "interconnects",
+						"#interconnect-cells", 0,
+						&src_args);
+					if (rc) {
+						CAM_ERR(CAM_CPAS,
+							"failed to read axi bus src info rc=%d",
+							rc);
 						return -EINVAL;
 					}
-					if (soc_private->use_cam_icc_path_str) {
-						rc = of_property_read_string(mnoc_node,
-							"cam-icc-path-names",
-							&cpas_core->axi_port[mnoc_idx]
-							.bus_client.common_data.name);
-						if (rc) {
-							CAM_ERR(CAM_CPAS, "failed to read cam-icc\
-								name strings mnoc_node: %s i:%d\
-								rc=%d", curr_node_ptr->node_name,\
-								i, rc);
-							return rc;
-						}
-					} else {
-						rc = of_property_read_string(mnoc_node,
-							"interconnect-names",
-							&cpas_core->axi_port[mnoc_idx]
-							.bus_client.common_data.name);
-						if (rc) {
-							CAM_ERR(CAM_CPAS,
-								"failed to read interconnect-names\
-									rc=%d", rc);
-							return rc;
-						}
-						rc = of_parse_phandle_with_args(
-							mnoc_node, "interconnects",
-							"#interconnect-cells", 0,
-							&src_args);
-						if (rc) {
-							CAM_ERR(CAM_CPAS,
-								"failed to read axi bus src info\
-									rc=%d", rc);
-							return -EINVAL;
-						}
 
-						of_node_put(src_args.np);
-						if (src_args.args_count != 1) {
-							CAM_ERR(CAM_CPAS,
-								"Invalid number of axi src args:\
-									%d", src_args.args_count);
-							return -EINVAL;
-						}
-
-						cpas_core->axi_port[mnoc_idx].bus_client
-						.common_data.src_id = src_args.args[0];
-
-						rc = of_parse_phandle_with_args(
-							mnoc_node, "interconnects",
-							"#interconnect-cells", 1,
-							&dst_args);
-						if (rc) {
-							CAM_ERR(CAM_CPAS,
-								"failed to read axi bus dst info\
-									rc=%d",	rc);
-							return -EINVAL;
-						}
-
-						of_node_put(dst_args.np);
-						if (dst_args.args_count != 1) {
-							CAM_ERR(CAM_CPAS,
-								"Invalid number of axi dst args:\
-									%d", dst_args.args_count);
-							return -EINVAL;
-						}
-
-						cpas_core->axi_port[mnoc_idx].bus_client
-						.common_data.dst_id = dst_args.args[0];
+					of_node_put(src_args.np);
+					if (src_args.args_count != 1) {
+						CAM_ERR(CAM_CPAS,
+							"Invalid number of axi src args: %d",
+							src_args.args_count);
+						return -EINVAL;
 					}
+
+					cpas_core->axi_port[mnoc_idx].bus_client
+					.common_data.src_id = src_args.args[0];
+
+					rc = of_parse_phandle_with_args(
+						mnoc_node, "interconnects",
+						"#interconnect-cells", 1,
+						&dst_args);
+					if (rc) {
+						CAM_ERR(CAM_CPAS,
+							"failed to read axi bus dst info rc=%d",
+							rc);
+						return -EINVAL;
+					}
+
+					of_node_put(dst_args.np);
+					if (dst_args.args_count != 1) {
+						CAM_ERR(CAM_CPAS,
+							"Invalid number of axi dst args: %d",
+							dst_args.args_count);
+						return -EINVAL;
+					}
+
+					cpas_core->axi_port[mnoc_idx].bus_client
+					.common_data.dst_id = dst_args.args[0];
+					cpas_core->axi_port[mnoc_idx].bus_client
+						.common_data.num_usecases = 2;
 				} else {
 					rc =  of_property_read_string(
 						curr_node, "qcom,axi-port-name",
@@ -429,8 +405,7 @@ static int cam_cpas_parse_node_tree(struct cam_cpas *cpas_core,
 						return rc;
 					}
 				}
-				cpas_core->axi_port[mnoc_idx].bus_client
-					.common_data.num_usecases = 2;
+
 				cpas_core->axi_port[mnoc_idx].axi_port_name =
 					cpas_core->axi_port[mnoc_idx]
 						.bus_client.common_data.name;
@@ -562,6 +537,8 @@ static int cam_cpas_parse_node_tree(struct cam_cpas *cpas_core,
 	return 0;
 }
 
+
+
 int cam_cpas_get_hw_features(struct platform_device *pdev,
 	struct cam_cpas_private_soc *soc_private)
 {
@@ -579,7 +556,8 @@ int cam_cpas_get_hw_features(struct platform_device *pdev,
 	CAM_DBG(CAM_CPAS, "fuse info elements count %d", count);
 
 	if (count <= 0) {
-		CAM_DBG(CAM_CPAS, "No or invalid fuse entries count: %d", count);
+		CAM_INFO(CAM_CPAS, "No or invalid fuse entries count: %d",
+			count);
 		goto end;
 	} else if (count%5 != 0) {
 		CAM_INFO(CAM_CPAS, "fuse entries should be multiple of 5 %d",
@@ -728,6 +706,7 @@ static int cam_cpas_parse_sys_cache_uids(
 {
 	enum cam_sys_cache_config_types type = CAM_LLCC_MAX;
 	int num_caches, i, rc;
+	int m = 0;
 	uint32_t scid;
 
 	soc_private->llcc_info = NULL;
@@ -783,10 +762,31 @@ static int cam_cpas_parse_sys_cache_uids(
 
 		if (IS_ERR_OR_NULL(soc_private->llcc_info[i].slic_desc)) {
 			CAM_ERR(CAM_CPAS,
-				"Failed to get slice desc for uid %u",
+				"Failed to get slice desc for uid %u due to LLCC delayed, camera need to wait for LLCC ready",
 				soc_private->llcc_info[i].uid);
-			rc = -EINVAL;
-			goto end;
+			do
+			{
+				msleep(1000);
+				soc_private->llcc_info[i].slic_desc =
+						llcc_slice_getd(soc_private->llcc_info[i].uid);
+				if (!IS_ERR_OR_NULL(soc_private->llcc_info[i].slic_desc)) {
+					CAM_INFO(CAM_CPAS,
+							"Success to get slic_desc %lld when LLCC delayed with retry %d", PTR_ERR(soc_private->llcc_info[i].slic_desc), m);
+						break;
+				} else {
+					CAM_ERR(CAM_CPAS,
+							"Failed to get slic_desc %lld, retry %d", PTR_ERR(soc_private->llcc_info[i].slic_desc), m);
+				}
+				m++;
+
+			} while(m < LLCC_RETRY);
+
+			if (m >= LLCC_RETRY) {
+				CAM_ERR(CAM_CPAS,
+						"Failed to get slic_desc with Max retry");
+				rc = -EINVAL;
+				goto end;
+			}
 		}
 
 		scid = llcc_get_slice_id(soc_private->llcc_info[i].slic_desc);
@@ -863,64 +863,53 @@ int cam_cpas_get_custom_dt_info(struct cam_hw_info *cpas_hw,
 		"interconnects");
 
 	if (soc_private->bus_icc_based) {
-		soc_private->use_cam_icc_path_str = of_property_read_bool(of_node,
-			"cam-icc-path-names");
-		if (soc_private->use_cam_icc_path_str) {
-			rc = of_property_read_string(of_node, "cam-icc-path-names",
-				&cpas_core->ahb_bus_client.common_data.name);
-			if (rc) {
-				CAM_ERR(CAM_CPAS, "device %s failed to read ahb cam-icc-path-names",
-					pdev->name);
-				return rc;
-			}
-		} else {
-			rc = of_property_read_string(of_node, "interconnect-names",
-				&cpas_core->ahb_bus_client.common_data.name);
-			if (rc) {
-				CAM_ERR(CAM_CPAS,
+		rc = of_property_read_string(of_node, "interconnect-names",
+			&cpas_core->ahb_bus_client.common_data.name);
+		if (rc) {
+			CAM_ERR(CAM_CPAS,
 				"device %s failed to read interconnect-names",
 				pdev->name);
-				return rc;
-			}
+			return rc;
+		}
 
-			rc = of_parse_phandle_with_args(of_node, "interconnects",
+		rc = of_parse_phandle_with_args(of_node, "interconnects",
 			"#interconnect-cells", 0, &src_args);
-			if (rc) {
-				CAM_ERR(CAM_CPAS,
+		if (rc) {
+			CAM_ERR(CAM_CPAS,
 				"device %s failed to read ahb bus src info",
 				pdev->name);
-				return rc;
-			}
-
-			of_node_put(src_args.np);
-			if (src_args.args_count != 1) {
-				CAM_ERR(CAM_CPAS,
-					"Invalid number of ahb src args: %d",
-					src_args.args_count);
-				return -EINVAL;
-			}
-
-			cpas_core->ahb_bus_client.common_data.src_id = src_args.args[0];
-
-			rc = of_parse_phandle_with_args(of_node, "interconnects",
-				"#interconnect-cells", 1, &dst_args);
-			if (rc) {
-				CAM_ERR(CAM_CPAS,
-					"device %s failed to read ahb bus dst info",
-					pdev->name);
-				return rc;
-			}
-
-			of_node_put(dst_args.np);
-			if (dst_args.args_count != 1) {
-				CAM_ERR(CAM_CPAS,
-					"Invalid number of ahb dst args: %d",
-					dst_args.args_count);
-				return -EINVAL;
-			}
-
-			cpas_core->ahb_bus_client.common_data.dst_id = dst_args.args[0];
+			return rc;
 		}
+
+		of_node_put(src_args.np);
+		if (src_args.args_count != 1) {
+			CAM_ERR(CAM_CPAS,
+				"Invalid number of ahb src args: %d",
+				src_args.args_count);
+			return -EINVAL;
+		}
+
+		cpas_core->ahb_bus_client.common_data.src_id = src_args.args[0];
+
+		rc = of_parse_phandle_with_args(of_node, "interconnects",
+			"#interconnect-cells", 1, &dst_args);
+		if (rc) {
+			CAM_ERR(CAM_CPAS,
+				"device %s failed to read ahb bus dst info",
+				pdev->name);
+			return rc;
+		}
+
+		of_node_put(dst_args.np);
+		if (dst_args.args_count != 1) {
+			CAM_ERR(CAM_CPAS,
+				"Invalid number of ahb dst args: %d",
+				dst_args.args_count);
+			return -EINVAL;
+		}
+
+		cpas_core->ahb_bus_client.common_data.dst_id = dst_args.args[0];
+
 		rc = of_property_read_u32(of_node, "cam-ahb-num-cases",
 			&cpas_core->ahb_bus_client.common_data.num_usecases);
 		if (rc) {
@@ -1241,7 +1230,7 @@ int cam_cpas_soc_init_resources(struct cam_hw_soc_info *soc_info,
 		return rc;
 	}
 
-	if (soc_info->irq_num && !irq_handler) {
+	if (soc_info->irq_line && !irq_handler) {
 		CAM_ERR(CAM_CPAS, "Invalid IRQ handler");
 		return -EINVAL;
 	}

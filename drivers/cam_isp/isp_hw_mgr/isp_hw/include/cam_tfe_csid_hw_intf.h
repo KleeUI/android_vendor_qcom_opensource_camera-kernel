@@ -1,7 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2019-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022,2024 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef _CAM_TFE_CSID_HW_INTF_H_
@@ -90,7 +89,6 @@ struct cam_isp_tfe_in_port_generic_info {
 	uint32_t                        rdi_count;
 	uint32_t                        secure_mode;
 	struct cam_isp_tfe_out_port_generic_info    *data;
-	bool                            epd_supported;
 };
 
 /**
@@ -108,7 +106,6 @@ struct cam_tfe_csid_hw_caps {
 	uint32_t      major_version;
 	uint32_t      minor_version;
 	uint32_t      version_incr;
-	bool          sync_clk;
 };
 
 /**
@@ -218,17 +215,13 @@ struct cam_tfe_csid_reset_cfg_args {
 /**
  * struct cam_csid_get_time_stamp_args-  time stamp capture arguments
  * @res_node :       Resource to get the time stamp
- * @time_stamp_val      : Captured time stamp
- * @boot_timestamp      : Boot time stamp
- * @prev_time_stamp_val : previous captured time stamp
- * @get_prev_timestamp  : flag to fetch previous captured time stamp from hardware
+ * @time_stamp_val : Captured time stamp
+ * @boot_timestamp : Boot time stamp
  */
 struct cam_tfe_csid_get_time_stamp_args {
 	struct cam_isp_resource_node      *node_res;
 	uint64_t                           time_stamp_val;
 	uint64_t                           boot_timestamp;
-	uint64_t                           prev_time_stamp_val;
-	bool                               get_prev_timestamp;
 };
 
 /**

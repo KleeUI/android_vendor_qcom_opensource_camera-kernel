@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (C) 2021 XiaoMi, Inc.
  */
 
 #ifndef _CAM_CSID_HW_INTF_H_
@@ -77,7 +77,6 @@ enum cam_ife_csid_secondary_evt_type {
  * @global_reset_en:      flag to indicate if global reset is enabled
  * @rup_en:               flag to indicate if rup is on csid side
  * @only_master_rup:      flag to indicate if only master RUP
- * @camif_irq_support:     flag to indicate if CSID supports CAMIF irq
  */
 struct cam_ife_csid_hw_caps {
 	uint32_t      num_rdis;
@@ -90,7 +89,6 @@ struct cam_ife_csid_hw_caps {
 	bool          global_reset_en;
 	bool          rup_en;
 	bool          only_master_rup;
-	bool          camif_irq_support;
 };
 
 struct cam_isp_out_port_generic_info {
@@ -160,13 +158,11 @@ struct cam_isp_in_port_generic_info {
  * struct cam_csid_secondary_evt_config - secondary event enablement
  * @evt_type:           Type of secondary event enabled [SOF/EPOCH/EOF...]
  * @en_secondary_evt:   Enable secondary event
- * @handle_camif_irq:    Flag to indicate if CSID IRQ is enabled
  *
  */
 struct cam_csid_secondary_evt_config {
 	enum cam_ife_csid_secondary_evt_type evt_type;
 	bool                                 en_secondary_evt;
-	bool                                 handle_camif_irq;
 };
 
 /**
@@ -197,14 +193,10 @@ struct cam_csid_secondary_evt_config {
  * @buf_done_controller: IRQ controller for buf done for version 680 hw
  * @cdm_ops:             CDM Ops
  * @event_cb:            Callback function to hw mgr in case of hw events
- * @phy_sel:             Phy selection number if tpg is enabled from userspace
  * @cb_priv:             Private pointer to return to callback
+ * @phy_sel:             Phy selection number if tpg is enabled from userspace
  * @can_use_lite:        Flag to indicate if current call qualifies for
  *                       acquire lite
- * @sfe_en:              Flag to indicate if SFE is enabled
- * @use_wm_pack:         [OUT]Flag to indicate if WM packing is to be used for packing
- * @secure_mode:         Holds secure mode state of the CSID
- * @handle_camif_irq:    Flag to indicate if CSID IRQ is enabled
  *
  */
 struct cam_csid_hw_reserve_resource_args {
@@ -227,12 +219,8 @@ struct cam_csid_hw_reserve_resource_args {
 	void                                     *cdm_ops;
 	cam_hw_mgr_event_cb_func                  event_cb;
 	uint32_t                                  phy_sel;
-	void                                     *cb_priv;
 	bool                                      can_use_lite;
-	bool                                      sfe_en;
-	bool                                      use_wm_pack;
-	bool                                      secure_mode;
-	bool                                      handle_camif_irq;
+	void                                     *cb_priv;
 };
 
 /**
@@ -292,7 +280,6 @@ struct cam_csid_hw_stop_args {
 struct cam_csid_hw_start_args {
 	struct cam_isp_resource_node            **node_res;
 	uint32_t                                  num_res;
-	bool                                      is_internal_start;
 };
 
 
@@ -318,18 +305,14 @@ struct cam_csid_reset_cfg_args {
 
 /**
  * struct cam_csid_get_time_stamp_args-  time stamp capture arguments
- * @node_res            : resource to get the time stamp
- * @time_stamp_val      : captured time stamp
- * @boot_timestamp      : boot time stamp
- * @get_prev_timestamp  : flag to fetch previous captured time stamp from hardware
- * @prev_time_stamp_val : previous captured time stamp
+ * @node_res         : resource to get the time stamp
+ * @time_stamp_val   : captured time stamp
+ * @boot_timestamp   : boot time stamp
  */
 struct cam_csid_get_time_stamp_args {
 	struct cam_isp_resource_node      *node_res;
 	uint64_t                           time_stamp_val;
 	uint64_t                           boot_timestamp;
-	bool                               get_prev_timestamp;
-	uint64_t                           prev_time_stamp_val;
 };
 
 /**

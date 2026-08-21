@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (C) 2021 XiaoMi, Inc.
  */
 
 #ifndef _CAM_ISP_CONTEXT_H_
@@ -51,16 +51,10 @@
 #define CAM_ISP_CTX_DUMP_REQUEST_NUM_WORDS  2
 
 /* Maximum entries in event record */
-#define CAM_ISP_CTX_EVENT_RECORD_MAX_ENTRIES   8
+#define CAM_ISP_CTX_EVENT_RECORD_MAX_ENTRIES   20
 
 /* Maximum length of tag while dumping */
-#define CAM_ISP_CONTEXT_DUMP_TAG_MAX_LEN 64
-
-/* AEB error count threshold */
-#define CAM_ISP_CONTEXT_AEB_ERROR_CNT_MAX 3
-
-/* Debug Buffer length*/
-#define CAM_ISP_CONTEXT_DBG_BUF_LEN 300
+#define CAM_ISP_CONTEXT_DUMP_TAG_MAX_LEN 32
 
 /* forward declaration */
 struct cam_isp_context;
@@ -263,8 +257,6 @@ struct cam_isp_context_event_record {
  * @recovery_req_id:           Req ID flagged for internal recovery
  * @last_sof_timestamp:        SOF timestamp of the last frame
  * @bubble_frame_cnt:          Count of the frame after bubble
- * @aeb_error_cnt:             Count number of times a specific AEB error scenario is
- *                             enountered
  * @state_monitor_head:        Write index to the state monitoring array
  * @req_info                   Request id information about last buf done
  * @cam_isp_ctx_state_monitor: State monitoring array
@@ -291,8 +283,6 @@ struct cam_isp_context_event_record {
  * @v4l2_event_sub_ids         contains individual bits representing subscribed v4l2 ids
  * @aeb_enabled:               Indicate if stream is for AEB
  * @do_internal_recovery:      Enable KMD halt/reset/resume internal recovery
- * @vfe_bus_comp_grp:          Vfe bus comp group record
- * @sfe_bus_comp_grp:          Sfe bus comp group record
  *
  */
 struct cam_isp_context {
@@ -313,13 +303,11 @@ struct cam_isp_context {
 	uint64_t                         boot_timestamp;
 	int32_t                          active_req_cnt;
 	int64_t                          reported_req_id;
-	uint64_t                         reported_frame_id;
 	uint32_t                         subscribe_event;
 	int64_t                          last_applied_req_id;
 	uint64_t                         recovery_req_id;
 	uint64_t                         last_sof_timestamp;
 	uint32_t                         bubble_frame_cnt;
-	uint32_t                         aeb_error_cnt;
 	atomic64_t                       state_monitor_head;
 	struct cam_isp_context_state_monitor cam_isp_ctx_state_monitor[
 		CAM_ISP_CTX_STATE_MONITOR_MAX_ENTRIES];
@@ -348,8 +336,6 @@ struct cam_isp_context {
 	uint32_t                              v4l2_event_sub_ids;
 	bool                                  aeb_enabled;
 	bool                                  do_internal_recovery;
-	struct cam_isp_hw_comp_record        *vfe_bus_comp_grp;
-	struct cam_isp_hw_comp_record        *sfe_bus_comp_grp;
 };
 
 /**
@@ -514,5 +500,29 @@ int cam_isp_context_init(struct cam_isp_context *ctx,
  *
  */
 int cam_isp_context_deinit(struct cam_isp_context *ctx);
+
+/**
+ * cam_isp_detect_framerate()
+ *
+ * @brief:                  function to detect framerate - XiaoMi add
+ *
+ * @ctx:                    ISP context obj to be detected
+ * @interval:               frame interval number to calculate framerate
+ *
+ */
+void cam_isp_detect_framerate(struct cam_isp_context *ctx,
+	uint interval);
+
+/**
+ * cam_isp_GetFrameBatchsize()
+ *
+ * @brief:                  function to get frame batchsize of HFR - XiaoMi add
+ *
+ * @ctx:                    ISP context obj to be detected
+ * @cpkt:                   Camera packet
+ *
+ */
+void cam_isp_GetFrameBatchsize(struct cam_context *ctx,
+	struct cam_packet  *cpkt);
 
 #endif  /* __CAM_ISP_CONTEXT_H__ */

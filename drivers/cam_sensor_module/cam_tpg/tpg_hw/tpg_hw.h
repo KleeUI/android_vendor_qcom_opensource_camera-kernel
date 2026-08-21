@@ -2,6 +2,7 @@
 
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
+ * Copyright (C) 2021 XiaoMi, Inc.
  */
 
 #ifndef __TPG_HW_H__
@@ -14,7 +15,6 @@
 #include <media/cam_sensor.h>
 #define TPG_HW_VERSION_1_0 0x10000000
 #define TPG_HW_VERSION_1_1 0x10000001
-#define TPG_HW_VERSION_1_2 0x10000002
 #define TPG_HW_VERSION_1_3 0x10000003
 
 

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
+ * Copyright (C) 2021 XiaoMi, Inc.
  */
 
 #include <linux/slab.h>
@@ -19,15 +20,6 @@ static int cam_sfe_get_dt_properties(struct cam_hw_soc_info *soc_info)
 	if (rc) {
 		CAM_ERR(CAM_SFE, "Error get DT properties failed rc=%d", rc);
 		goto end;
-	}
-
-	rc = of_property_read_u32(pdev->dev.of_node, "rt-wrapper-base",
-		&soc_private->rt_wrapper_base);
-	if (rc) {
-		soc_private->rt_wrapper_base = 0;
-		CAM_DBG(CAM_ISP, "rc: %d Error reading rt_wrapper_base for core_idx: %u",
-			rc, soc_info->index);
-		rc = 0;
 	}
 
 	soc_private->num_pid = 0;

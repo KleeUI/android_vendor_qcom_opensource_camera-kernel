@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2016-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (C) 2021 XiaoMi, Inc.
  */
 
 #include <linux/module.h>
@@ -9,7 +9,6 @@
 #include <linux/platform_device.h>
 #include <linux/highmem.h>
 #include <linux/types.h>
-#include <linux/rwsem.h>
 
 #include <mm/slab.h>
 
@@ -19,6 +18,7 @@
 #include <media/v4l2-ioctl.h>
 #include <media/cam_req_mgr.h>
 #include <media/cam_defs.h>
+#include <linux/list_sort.h>
 
 #include "cam_req_mgr_dev.h"
 #include "cam_req_mgr_util.h"
@@ -29,16 +29,13 @@
 #include "cam_common_util.h"
 #include "cam_compat.h"
 #include "cam_cpas_hw.h"
-#include "cam_compat.h"
-#include "camera_main.h"
 
-#define CAM_REQ_MGR_EVENT_MAX 30
+/* Xiaomi: enlarge from 30 to 120 */
+#define CAM_REQ_MGR_EVENT_MAX 120
 
 static struct cam_req_mgr_device g_dev;
 struct kmem_cache *g_cam_req_mgr_timer_cachep;
 static struct list_head cam_req_mgr_ordered_sd_list;
-
-DECLARE_RWSEM(rwsem_lock);
 
 static struct device_attribute camera_debug_sysfs_attr =
 	__ATTR(debug_node, 0600, NULL, cam_debug_sysfs_node_store);
@@ -108,27 +105,9 @@ static void cam_v4l2_device_cleanup(void)
 	g_dev.v4l2_dev = NULL;
 }
 
-void cam_req_mgr_rwsem_read_op(enum cam_subdev_rwsem lock)
-{
-	if (lock == CAM_SUBDEV_LOCK)
-		down_read(&rwsem_lock);
-	else if (lock == CAM_SUBDEV_UNLOCK)
-		up_read(&rwsem_lock);
-}
-
-static void cam_req_mgr_rwsem_write_op(enum cam_subdev_rwsem lock)
-{
-	if (lock == CAM_SUBDEV_LOCK)
-		down_write(&rwsem_lock);
-	else if (lock == CAM_SUBDEV_UNLOCK)
-		up_write(&rwsem_lock);
-}
-
 static int cam_req_mgr_open(struct file *filep)
 {
 	int rc;
-
-	cam_req_mgr_rwsem_write_op(CAM_SUBDEV_LOCK);
 
 	mutex_lock(&g_dev.cam_lock);
 	if (g_dev.open_cnt >= 1) {
@@ -155,14 +134,12 @@ static int cam_req_mgr_open(struct file *filep)
 	}
 
 	mutex_unlock(&g_dev.cam_lock);
-	cam_req_mgr_rwsem_write_op(CAM_SUBDEV_UNLOCK);
 	return rc;
 
 mem_mgr_init_fail:
 	v4l2_fh_release(filep);
 end:
 	mutex_unlock(&g_dev.cam_lock);
-	cam_req_mgr_rwsem_write_op(CAM_SUBDEV_UNLOCK);
 	return rc;
 }
 
@@ -192,14 +169,10 @@ static int cam_req_mgr_close(struct file *filep)
 	CAM_WARN(CAM_CRM,
 		"release invoked associated userspace process has died, open_cnt: %d",
 		g_dev.open_cnt);
-
-	cam_req_mgr_rwsem_write_op(CAM_SUBDEV_LOCK);
-
 	mutex_lock(&g_dev.cam_lock);
 
 	if (g_dev.open_cnt <= 0) {
 		mutex_unlock(&g_dev.cam_lock);
-		cam_req_mgr_rwsem_write_op(CAM_SUBDEV_UNLOCK);
 		return -EINVAL;
 	}
 
@@ -230,8 +203,6 @@ static int cam_req_mgr_close(struct file *filep)
 	cam_mem_mgr_deinit();
 	mutex_unlock(&g_dev.cam_lock);
 
-	cam_req_mgr_rwsem_write_op(CAM_SUBDEV_UNLOCK);
-
 	return 0;
 }
 
@@ -257,13 +228,11 @@ static void cam_v4l2_event_queue_notify_error(const struct v4l2_event *old,
 	switch (old->id) {
 	case V4L_EVENT_CAM_REQ_MGR_SOF:
 	case V4L_EVENT_CAM_REQ_MGR_SOF_BOOT_TS:
-	case V4L_EVENT_CAM_REQ_MGR_SOF_UNIFIED_TS:
 		if (ev_header->u.frame_msg.request_id)
 			CAM_ERR(CAM_CRM,
 				"Failed to notify %s Sess %X FrameId %lld FrameMeta %d ReqId %lld link %X",
 				((old->id == V4L_EVENT_CAM_REQ_MGR_SOF) ?
-				"SOF_TS" : ((old->id == V4L_EVENT_CAM_REQ_MGR_SOF_BOOT_TS) ?
-				"BOOT_TS" : "UNIFIED_TS")),
+				"SOF_TS" : "BOOT_TS"),
 				ev_header->session_hdl,
 				ev_header->u.frame_msg.frame_id,
 				ev_header->u.frame_msg.frame_id_meta,
@@ -273,8 +242,7 @@ static void cam_v4l2_event_queue_notify_error(const struct v4l2_event *old,
 			CAM_WARN_RATE_LIMIT_CUSTOM(CAM_CRM, 5, 1,
 				"Failed to notify %s Sess %X FrameId %lld FrameMeta %d ReqId %lld link %X",
 				((old->id == V4L_EVENT_CAM_REQ_MGR_SOF) ?
-				"SOF_TS" : ((old->id == V4L_EVENT_CAM_REQ_MGR_SOF_BOOT_TS) ?
-				"BOOT_TS" : "UNIFIED_TS")),
+				"SOF_TS" : "BOOT_TS"),
 				ev_header->session_hdl,
 				ev_header->u.frame_msg.frame_id,
 				ev_header->u.frame_msg.frame_id_meta,
@@ -719,6 +687,24 @@ void cam_subdev_notify_message(u32 subdev_type,
 }
 EXPORT_SYMBOL(cam_subdev_notify_message);
 
+
+static int cam_req_mgr_ordered_list_cmp(void *priv,
+	struct list_head *head_1, struct list_head *head_2)
+{
+	struct cam_subdev *entry_1 =
+		list_entry(head_1, struct cam_subdev, list);
+	struct cam_subdev *entry_2 =
+		list_entry(head_2, struct cam_subdev, list);
+	int ret = -1;
+
+	if (entry_1->close_seq_prior > entry_2->close_seq_prior)
+		return 1;
+	else if (entry_1->close_seq_prior < entry_2->close_seq_prior)
+		return ret;
+	else
+		return 0;
+}
+
 bool cam_req_mgr_is_open(void)
 {
 	bool crm_status = false;
@@ -935,23 +921,9 @@ static int cam_req_mgr_remove(struct platform_device *pdev)
 
 static int cam_req_mgr_probe(struct platform_device *pdev)
 {
-	int rc = 0, i;
+	int rc = 0;
 	struct component_match *match_list = NULL;
 	struct device *dev = &pdev->dev;
-	struct device_node *np = NULL;
-
-	for (i = 0; i < ARRAY_SIZE(cam_component_i2c_drivers); i++) {
-		while ((np = of_find_compatible_node(np, NULL,
-			cam_component_i2c_drivers[i]->driver.of_match_table->compatible))) {
-			if (of_device_is_available(np) && !(of_find_i2c_device_by_node(np))) {
-				CAM_INFO_RATE_LIMIT(CAM_CRM,
-					"I2C device: %s not available, deferring probe",
-					np->full_name);
-				rc = -EPROBE_DEFER;
-				goto end;
-			}
-		}
-	}
 
 	rc = camera_component_match_add_drivers(dev, &match_list);
 	if (rc) {
@@ -972,7 +944,6 @@ static int cam_req_mgr_probe(struct platform_device *pdev)
 	}
 
 end:
-	of_node_put(np);
 	return rc;
 }
 

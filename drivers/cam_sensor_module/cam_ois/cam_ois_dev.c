@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022-2024, Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (C) 2021 XiaoMi, Inc.
  */
 
 #include "cam_ois_dev.h"
@@ -174,19 +174,22 @@ static int cam_ois_init_subdev_param(struct cam_ois_ctrl_t *o_ctrl)
 	return rc;
 }
 
-static int cam_ois_i2c_component_bind(struct device *dev,
-	struct device *master_dev, void *data)
+static int cam_ois_i2c_driver_probe(struct i2c_client *client,
+	 const struct i2c_device_id *id)
 {
 	int                          rc = 0;
-	struct i2c_client           *client = NULL;
 	struct cam_ois_ctrl_t       *o_ctrl = NULL;
 	struct cam_ois_soc_private  *soc_private = NULL;
 
-	client = container_of(dev, struct i2c_client, dev);
-	if (client == NULL) {
-		CAM_ERR(CAM_OIS, "Invalid Args client: %pK",
-			client);
+	if (client == NULL || id == NULL) {
+		CAM_ERR(CAM_OIS, "Invalid Args client: %pK id: %pK",
+			client, id);
 		return -EINVAL;
+	}
+
+	if (!i2c_check_functionality(client->adapter, I2C_FUNC_I2C)) {
+		CAM_ERR(CAM_OIS, "i2c_check_functionality failed");
+		goto probe_failure;
 	}
 
 	o_ctrl = kzalloc(sizeof(*o_ctrl), GFP_KERNEL);
@@ -234,27 +237,17 @@ probe_failure:
 	return rc;
 }
 
-static void cam_ois_i2c_component_unbind(struct device *dev,
-	struct device *master_dev, void *data)
+static int cam_ois_i2c_driver_remove(struct i2c_client *client)
 {
 	int                             i;
-	struct i2c_client              *client = NULL;
-	struct cam_ois_ctrl_t          *o_ctrl = NULL;
+	struct cam_ois_ctrl_t          *o_ctrl = i2c_get_clientdata(client);
 	struct cam_hw_soc_info         *soc_info;
 	struct cam_ois_soc_private     *soc_private;
 	struct cam_sensor_power_ctrl_t *power_info;
 
-	client = container_of(dev, struct i2c_client, dev);
-	if (!client) {
-		CAM_ERR(CAM_OIS,
-			"Failed to get i2c client");
-		return;
-	}
-
-	o_ctrl = i2c_get_clientdata(client);
 	if (!o_ctrl) {
 		CAM_ERR(CAM_OIS, "ois device is NULL");
-		return;
+		return -EINVAL;
 	}
 
 	CAM_INFO(CAM_OIS, "i2c driver remove invoked");
@@ -275,77 +268,9 @@ static void cam_ois_i2c_component_unbind(struct device *dev,
 	kfree(o_ctrl->soc_info.soc_private);
 	v4l2_set_subdevdata(&o_ctrl->v4l2_dev_str.sd, NULL);
 	kfree(o_ctrl);
-}
-
-const static struct component_ops cam_ois_i2c_component_ops = {
-	.bind = cam_ois_i2c_component_bind,
-	.unbind = cam_ois_i2c_component_unbind,
-};
-
-#if KERNEL_VERSION(6, 2, 0) <= LINUX_VERSION_CODE
-static int cam_ois_i2c_driver_probe(struct i2c_client *client)
-{
-	int rc = 0;
-
-	if (client == NULL) {
-		CAM_ERR(CAM_OIS, "Invalid Args client: %pK",
-			client);
-		return -EINVAL;
-	}
-
-	if (!i2c_check_functionality(client->adapter, I2C_FUNC_I2C)) {
-		CAM_ERR(CAM_OIS, "%s :: i2c_check_functionality failed",
-			client->name);
-		return -EFAULT;
-	}
-
-	CAM_DBG(CAM_OIS, "Adding sensor ois component");
-	rc = component_add(&client->dev, &cam_ois_i2c_component_ops);
-	if (rc)
-		CAM_ERR(CAM_OIS, "failed to add component rc: %d", rc);
-
-	return rc;
-}
-#else
-static int cam_ois_i2c_driver_probe(struct i2c_client *client,
-	const struct i2c_device_id *id)
-{
-	int rc = 0;
-
-	if (client == NULL || id == NULL) {
-		CAM_ERR(CAM_OIS, "Invalid Args client: %pK id: %pK",
-			client, id);
-		return -EINVAL;
-	}
-
-	if (!i2c_check_functionality(client->adapter, I2C_FUNC_I2C)) {
-		CAM_ERR(CAM_OIS, "%s :: i2c_check_functionality failed",
-			client->name);
-		return -EFAULT;
-	}
-
-	CAM_DBG(CAM_OIS, "Adding sensor ois component");
-	rc = component_add(&client->dev, &cam_ois_i2c_component_ops);
-	if (rc)
-		CAM_ERR(CAM_OIS, "failed to add component rc: %d", rc);
-
-	return rc;
-}
-#endif
-
-#if KERNEL_VERSION(6, 1, 0) <= LINUX_VERSION_CODE
-void cam_ois_i2c_driver_remove(struct i2c_client *client)
-{
-	component_del(&client->dev, &cam_ois_i2c_component_ops);
-}
-#else
-static int cam_ois_i2c_driver_remove(struct i2c_client *client)
-{
-	component_del(&client->dev, &cam_ois_i2c_component_ops);
 
 	return 0;
 }
-#endif
 
 static int cam_ois_component_bind(struct device *dev,
 	struct device *master_dev, void *data)
@@ -384,6 +309,7 @@ static int cam_ois_component_bind(struct device *dev,
 	INIT_LIST_HEAD(&(o_ctrl->i2c_init_data.list_head));
 	INIT_LIST_HEAD(&(o_ctrl->i2c_calib_data.list_head));
 	INIT_LIST_HEAD(&(o_ctrl->i2c_fwinit_data.list_head));
+	INIT_LIST_HEAD(&(o_ctrl->i2c_postinit_data.list_head));
 	INIT_LIST_HEAD(&(o_ctrl->i2c_mode_data.list_head));
 	INIT_LIST_HEAD(&(o_ctrl->i2c_time_data.list_head));
 	mutex_init(&(o_ctrl->ois_mutex));
@@ -485,13 +411,8 @@ static const struct of_device_id cam_ois_dt_match[] = {
 	{ }
 };
 
-static const struct of_device_id cam_ois_i2c_dt_match[] = {
-	{ .compatible = "qcom,cam-i2c-ois" },
-	{ }
-};
 
 MODULE_DEVICE_TABLE(of, cam_ois_dt_match);
-MODULE_DEVICE_TABLE(of, cam_ois_i2c_dt_match);
 
 struct platform_driver cam_ois_platform_driver = {
 	.driver = {
@@ -503,19 +424,16 @@ struct platform_driver cam_ois_platform_driver = {
 	.remove = cam_ois_platform_driver_remove,
 };
 static const struct i2c_device_id cam_ois_i2c_id[] = {
-	{ OIS_DRIVER_I2C, (kernel_ulong_t)NULL},
+	{ "msm_ois", (kernel_ulong_t)NULL},
 	{ }
 };
 
-struct i2c_driver cam_ois_i2c_driver = {
+static struct i2c_driver cam_ois_i2c_driver = {
 	.id_table = cam_ois_i2c_id,
 	.probe  = cam_ois_i2c_driver_probe,
 	.remove = cam_ois_i2c_driver_remove,
 	.driver = {
-		.name = OIS_DRIVER_I2C,
-		.owner = THIS_MODULE,
-		.of_match_table = cam_ois_i2c_dt_match,
-		.suppress_bind_attrs = true,
+		.name = "msm_ois",
 	},
 };
 

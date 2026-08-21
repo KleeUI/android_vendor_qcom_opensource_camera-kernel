@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2021, The Linux Foundation. All rights reserved.
+ * Copyright (C) 2021 XiaoMi, Inc.
  */
 
 #include "cam_tpg_dev.h"
 #include "cam_tpg_core.h"
 #include "camera_main.h"
 #include "tpg_hw/tpg_hw_v_1_0/tpg_hw_v_1_0_data.h"
-#include "tpg_hw/tpg_hw_v_1_2/tpg_hw_v_1_2_data.h"
 #include "tpg_hw/tpg_hw_v_1_3/tpg_hw_v_1_3_data.h"
 
 static int cam_tpg_subdev_close(struct v4l2_subdev *sd,
@@ -314,8 +314,6 @@ static int cam_tpg_component_bind(struct device *dev,
 		goto release_subdev;
 	}
 
-	platform_set_drvdata(pdev, tpg_dev);
-
 	return rc;
 
 release_subdev:
@@ -329,7 +327,9 @@ static void cam_tpg_component_unbind(struct device *dev,
 	struct device *master_dev, void *data)
 {
 	struct platform_device *pdev = to_platform_device(dev);
-	struct cam_tpg_device  *tpg_dev = platform_get_drvdata(pdev);
+
+	struct v4l2_subdev *subdev = platform_get_drvdata(pdev);
+	struct cam_tpg_device *tpg_dev = v4l2_get_subdevdata(subdev);
 
 	CAM_INFO(CAM_TPG, "Unbind TPG component");
 	cam_cpas_unregister_client(tpg_dev->cpas_handle);
@@ -369,10 +369,6 @@ static const struct of_device_id cam_tpg_dt_match[] = {
 	{
 		.compatible = "qcom,cam-tpg101",
 		.data = &tpg_v_1_0_hw_info,
-	},
-	{
-		.compatible = "qcom,cam-tpg102",
-		.data = &tpg_v_1_2_hw_info,
 	},
 	{
 		.compatible = "qcom,cam-tpg103",

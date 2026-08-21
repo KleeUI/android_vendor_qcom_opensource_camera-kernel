@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (C) 2021 XiaoMi, Inc.
  */
 
 #ifndef _CAM_CCI_DEV_H_
@@ -138,7 +138,7 @@ struct cam_cci_master_info {
 	atomic_t done_pending[NUM_QUEUES];
 	spinlock_t lock_q[NUM_QUEUES];
 	struct semaphore master_sem;
-	struct mutex freq_cnt_lock;
+	spinlock_t freq_cnt_lock;
 	uint16_t freq_ref_cnt;
 	bool is_initilized;
 };
@@ -317,4 +317,7 @@ int cam_cci_init_module(void);
  * @brief : API to remove CCI Hw from platform framework.
  */
 void cam_cci_exit_module(void);
+#define VIDIOC_MSM_CCI_CFG \
+	_IOWR('V', BASE_VIDIOC_PRIVATE + 23, struct cam_cci_ctrl)
+
 #endif /* _CAM_CCI_DEV_H_ */

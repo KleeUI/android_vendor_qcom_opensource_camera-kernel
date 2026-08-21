@@ -1,7 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-only WITH Linux-syscall-note */
 /*
  * Copyright (c) 2019-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2023-2024, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 
 #ifndef __UAPI_CAM_TFE_H__
@@ -72,7 +71,6 @@
 #define CAM_ISP_TFE_GENERIC_BLOB_TYPE_CLOCK_CONFIG        1
 #define CAM_ISP_TFE_GENERIC_BLOB_TYPE_BW_CONFIG_V2        2
 #define CAM_ISP_TFE_GENERIC_BLOB_TYPE_CSID_CLOCK_CONFIG   3
-#define CAM_ISP_TFE_GENERIC_BLOB_TYPE_BW_LIMITER_CFG      16
 
 /* DSP mode */
 #define CAM_ISP_TFE_DSP_MODE_NONE                   0
@@ -95,7 +93,6 @@
 /* Feature Flag indicators */
 #define CAM_ISP_TFE_FLAG_QCFA_BIN                        BIT(0)
 #define CAM_ISP_TFE_FLAG_BAYER_BIN                       BIT(1)
-#define CAM_ISP_TFE_FLAG_EPD_SUPPORT                     BIT(2)
 
 /* Query devices */
 /**
@@ -226,10 +223,7 @@ struct cam_isp_tfe_in_port_info {
 	__u32                            sensor_fps;
 	__u32                            init_frame_drop;
 	__u32                            num_out_res;
-	union {
-		struct cam_isp_tfe_out_port_info data[1];
-		__DECLARE_FLEX_ARRAY(struct cam_isp_tfe_out_port_info, data_flex);
-	};
+	struct cam_isp_tfe_out_port_info data[1];
 };
 
 /**
@@ -315,10 +309,7 @@ struct cam_isp_tfe_in_port_info_v2 {
 	__u32                            reserve_field_4;
 	__u32                            reserve_field_5;
 	__u32                            reserve_field_6;
-	union {
-		struct cam_isp_tfe_out_port_info data[1];
-		__DECLARE_FLEX_ARRAY(struct cam_isp_tfe_out_port_info, data_flex);
-	};
+	struct cam_isp_tfe_out_port_info data[1];
 };
 
 /**
@@ -375,10 +366,7 @@ struct cam_isp_tfe_port_hfr_config {
 struct cam_isp_tfe_resource_hfr_config {
 	__u32                              num_ports;
 	__u32                              reserved;
-	union {
-		struct cam_isp_tfe_port_hfr_config port_hfr_config[1];
-		__DECLARE_FLEX_ARRAY(struct cam_isp_tfe_port_hfr_config, port_hfr_config_flex);
-	};
+	struct cam_isp_tfe_port_hfr_config port_hfr_config[1];
 } __attribute__((packed));
 
 /**
@@ -410,10 +398,7 @@ struct cam_isp_tfe_dual_stripe_config {
 struct cam_isp_tfe_dual_config {
 	__u32                                 num_ports;
 	__u32                                 reserved;
-	union {
-		struct cam_isp_tfe_dual_stripe_config stripes[1];
-		__DECLARE_FLEX_ARRAY(struct cam_isp_tfe_dual_stripe_config, stripes_flex);
-	};
+	struct cam_isp_tfe_dual_stripe_config stripes[1];
 } __attribute__((packed));
 
 /**
@@ -436,10 +421,7 @@ struct cam_isp_tfe_clock_config {
 	__u32                       num_rdi;
 	__u64                       left_pix_hz;
 	__u64                       right_pix_hz;
-	union {
-		__u64                       rdi_hz[1];
-		__DECLARE_FLEX_ARRAY(__u64, rdi_hz_flex);
-	};
+	__u64                       rdi_hz[1];
 } __attribute__((packed));
 
 /**
@@ -464,10 +446,7 @@ struct cam_isp_tfe_csid_clock_config {
 struct cam_isp_tfe_bw_config_v2 {
 	__u32                             usage_type;
 	__u32                             num_paths;
-	union {
-		struct cam_axi_per_path_bw_vote   axi_path[1];
-		__DECLARE_FLEX_ARRAY(struct cam_axi_per_path_bw_vote, axi_path_flex);
-	};
+	struct cam_axi_per_path_bw_vote   axi_path[1];
 } __attribute__((packed));
 
 /**
@@ -492,40 +471,6 @@ struct cam_isp_tfe_acquire_hw_info {
 	__u32                input_info_size;
 	__u32                input_info_offset;
 	__u64                data;
-};
-
-/**
- * struct cam_isp_tfe_wm_bw_limiter_config - ISP TFE write master
- *                                       BW limter config
- *
- *
- * @res_type          : output resource type defined in file cam_isp_tfe.h
- * @enable_limiter    : 0 for disable else enabled
- * @counter_limit     : Max counter value
- */
-struct cam_isp_tfe_wm_bw_limiter_config {
-	__u32         res_type;
-	__u32         enable_limiter;
-	__u32         counter_limit[CAM_PACKET_MAX_PLANES];
-};
-
-/**
- * struct cam_isp_tfe_out_rsrc_bw_limiter_config - ISP TFE out rsrc BW limiter config
- *
- *    Configure BW limiter for ISP TFE WMs
- *
- * @version          : Version field
- * @num_ports        : Number of ports
- * @bw_limit_config  : WM BW limiter config
- */
-struct cam_isp_tfe_out_rsrc_bw_limiter_config {
-	__u32                                       version;
-	__u32                                       num_ports;
-	union {
-		struct cam_isp_tfe_wm_bw_limiter_config     bw_limiter_config[1];
-		__DECLARE_FLEX_ARRAY(
-			struct cam_isp_tfe_wm_bw_limiter_config, bw_limiter_config_flex);
-	};
 };
 
 #define CAM_TFE_ACQUIRE_COMMON_VER0         0x1000

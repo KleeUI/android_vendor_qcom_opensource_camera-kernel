@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
+ * Copyright (C) 2021 XiaoMi, Inc.
  */
 
 #ifndef _CAM_CSIPHY_SOC_H_
@@ -31,8 +32,6 @@
 #define CSIPHY_VERSION_V20                        0x20
 #define CSIPHY_VERSION_V201                       0x201
 #define CSIPHY_VERSION_V210                       0x210
-#define CSIPHY_VERSION_V211                       0x211
-#define CSIPHY_VERSION_V213                       0x213
 
 /**
  * @csiphy_dev: CSIPhy device structure

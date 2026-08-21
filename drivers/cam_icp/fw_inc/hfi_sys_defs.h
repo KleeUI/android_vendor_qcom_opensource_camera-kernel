@@ -1,7 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
- * Copyright (c) 2017-2019, 2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
+ *  Copyright (c) 2017-2019, The Linux Foundation. All rights reserved.
  */
 
 #ifndef _HFI_DEFS_H_
@@ -170,14 +169,13 @@
 /* System  level property base offset */
 #define HFI_PROPERTY_ICP_COMMON_START  (HFI_DOMAIN_BASE_ICP + 0x0)
 
-#define HFI_PROP_SYS_DEBUG_CFG             (HFI_PROPERTY_ICP_COMMON_START + 0x1)
-#define HFI_PROP_SYS_UBWC_CFG              (HFI_PROPERTY_ICP_COMMON_START + 0x2)
-#define HFI_PROP_SYS_IMAGE_VER             (HFI_PROPERTY_ICP_COMMON_START + 0x3)
-#define HFI_PROP_SYS_SUPPORTED             (HFI_PROPERTY_ICP_COMMON_START + 0x4)
-#define HFI_PROP_SYS_IPEBPS_PC             (HFI_PROPERTY_ICP_COMMON_START + 0x5)
-#define HFI_PROP_SYS_FW_DUMP_CFG           (HFI_PROPERTY_ICP_COMMON_START + 0x8)
-#define HFI_PROPERTY_SYS_UBWC_CONFIG_EX    (HFI_PROPERTY_ICP_COMMON_START + 0x9)
-#define HFI_PROPERTY_SYS_ICP_HW_FREQUENCY  (HFI_PROPERTY_ICP_COMMON_START + 0xa)
+#define HFI_PROP_SYS_DEBUG_CFG           (HFI_PROPERTY_ICP_COMMON_START + 0x1)
+#define HFI_PROP_SYS_UBWC_CFG            (HFI_PROPERTY_ICP_COMMON_START + 0x2)
+#define HFI_PROP_SYS_IMAGE_VER           (HFI_PROPERTY_ICP_COMMON_START + 0x3)
+#define HFI_PROP_SYS_SUPPORTED           (HFI_PROPERTY_ICP_COMMON_START + 0x4)
+#define HFI_PROP_SYS_IPEBPS_PC           (HFI_PROPERTY_ICP_COMMON_START + 0x5)
+#define HFI_PROP_SYS_FW_DUMP_CFG         (HFI_PROPERTY_ICP_COMMON_START + 0x8)
+#define HFI_PROPERTY_SYS_UBWC_CONFIG_EX  (HFI_PROPERTY_ICP_COMMON_START + 0x9)
 
 /* Capabilities reported at sys init */
 #define HFI_CAPS_PLACEHOLDER_1         (HFI_COMMON_BASE + 0x1)
@@ -261,10 +259,7 @@ struct hfi_caps_support {
  */
 struct hfi_caps_support_info {
 	uint32_t num_caps;
-	union {
-		struct hfi_caps_support caps_data[1];
-		__DECLARE_FLEX_ARRAY(struct hfi_caps_support, caps_data_flex);
-	};
+	struct hfi_caps_support caps_data[1];
 } __packed;
 
 /**
@@ -353,10 +348,7 @@ struct hfi_cmd_prop {
 	uint32_t size;
 	uint32_t pkt_type;
 	uint32_t num_prop;
-	union {
-		uint32_t prop_data[1];
-		__DECLARE_FLEX_ARRAY(uint32_t, prop_data_flex);
-	};
+	uint32_t prop_data[1];
 } __packed;
 
 /**
@@ -413,10 +405,7 @@ struct hfi_sys_support {
  */
 struct hfi_supported_prop {
 	uint32_t num_prop;
-	union {
-		uint32_t prop_data[1];
-		__DECLARE_FLEX_ARRAY(uint32_t, prop_data_flex);
-	};
+	uint32_t prop_data[1];
 } __packed;
 
 /**
@@ -431,10 +420,7 @@ struct hfi_image_version {
 	uint32_t major;
 	uint32_t minor;
 	uint32_t ver_name_size;
-	union {
-		uint8_t  ver_name[1];
-		__DECLARE_FLEX_ARRAY(uint8_t, ver_name_flex);
-	};
+	uint8_t  ver_name[1];
 } __packed;
 
 /**
@@ -468,10 +454,7 @@ struct hfi_msg_init_done {
 	uint32_t pkt_type;
 	uint32_t err_type;
 	uint32_t num_prop;
-	union {
-		uint32_t prop_data[1];
-		__DECLARE_FLEX_ARRAY(uint32_t, prop_data_flex);
-	};
+	uint32_t prop_data[1];
 } __packed;
 
 /**
@@ -499,10 +482,7 @@ struct hfi_msg_prop {
 	uint32_t size;
 	uint32_t pkt_type;
 	uint32_t num_prop;
-	union {
-		uint32_t prop_data[1];
-		__DECLARE_FLEX_ARRAY(uint32_t, prop_data_flex);
-	};
+	uint32_t prop_data[1];
 } __packed;
 
 /**
@@ -551,10 +531,7 @@ struct hfi_msg_debug {
 	uint32_t msg_size;
 	uint32_t timestamp_hi;
 	uint32_t timestamp_lo;
-	union {
-		uint8_t  msg_data[1];
-		__DECLARE_FLEX_ARRAY(uint8_t, msg_data_flex);
-	};
+	uint8_t  msg_data[1];
 } __packed;
 /**
  * struct hfi_msg_event_notify
@@ -575,10 +552,7 @@ struct hfi_msg_event_notify {
 	uint32_t event_id;
 	uint32_t event_data1;
 	uint32_t event_data2;
-	union {
-		uint32_t ext_event_data[1];
-		__DECLARE_FLEX_ARRAY(uint32_t, ext_event_data_flex);
-	};
+	uint32_t ext_event_data[1];
 } __packed;
 /**
  * end of sys message packet types
