@@ -1,7 +1,10 @@
 # Makefile for use with Android's kernel/build system
 
+KERNEL_ROOT ?= $(KERNEL_SRC)
+KBUILD_EXTRA_SYMBOLS ?= $(OUT_DIR)/../sm8450-modules/qcom/opensource/mmrm-driver/Module.symvers
+
 KBUILD_OPTIONS += CAMERA_KERNEL_ROOT=$(KERNEL_SRC)/$(M)
-KBUILD_OPTIONS += KERNEL_ROOT=$(ROOT_DIR)/$(KERNEL_DIR)
+KBUILD_OPTIONS += KERNEL_ROOT=$(KERNEL_ROOT)
 KBUILD_OPTIONS += KBUILD_EXTRA_SYMBOLS=$(KBUILD_EXTRA_SYMBOLS)
 
 all: modules
