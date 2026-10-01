@@ -51,6 +51,16 @@ static int cam_vfe_get_dt_properties(struct cam_hw_soc_info *soc_info)
 		return rc;
 	}
 
+	if (of_find_property(of_node, "rt-wrapper-base", NULL)) {
+		rc = of_property_read_u32(of_node, "rt-wrapper-base",
+			&vfe_soc_private->rt_wrapper_base);
+		if (rc) {
+			CAM_ERR(CAM_ISP, "Invalid rt-wrapper-base for core %u: %d",
+				soc_info->index, rc);
+			return rc;
+		}
+	}
+
 	vfe_soc_private->is_ife_lite = false;
 	if (strnstr(soc_info->compatible, "lite",
 		strlen(soc_info->compatible)) != NULL) {

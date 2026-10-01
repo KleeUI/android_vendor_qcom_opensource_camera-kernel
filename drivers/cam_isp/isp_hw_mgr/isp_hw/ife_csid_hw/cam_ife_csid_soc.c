@@ -31,6 +31,16 @@ static int cam_ife_csid_get_dt_properties(struct cam_hw_soc_info *soc_info)
 		soc_private->max_width_enabled = true;
 	}
 
+	if (of_find_property(of_node, "rt-wrapper-base", NULL)) {
+		rc = of_property_read_u32(of_node, "rt-wrapper-base",
+			&soc_private->rt_wrapper_base);
+		if (rc) {
+			CAM_ERR(CAM_ISP, "Invalid rt-wrapper-base for core %u: %d",
+				soc_info->index, rc);
+			return rc;
+		}
+	}
+
 	soc_private->is_ife_csid_lite = false;
 	if (strnstr(soc_info->compatible, "lite",
 		strlen(soc_info->compatible)) != NULL) {

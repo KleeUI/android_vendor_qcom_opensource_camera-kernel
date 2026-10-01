@@ -107,6 +107,8 @@ static int cam_vfe_top_ver4_mux_get_base(struct cam_vfe_top_ver4_priv *top_priv,
 	uint32_t                          mem_base = 0;
 	struct cam_isp_hw_get_cmd_update *cdm_args  = cmd_args;
 	struct cam_cdm_utils_ops         *cdm_util_ops = NULL;
+	struct cam_vfe_soc_private       *soc_private;
+	uint32_t                          rt_base;
 
 	if (arg_size != sizeof(struct cam_isp_hw_get_cmd_update)) {
 		CAM_ERR(CAM_ISP, "Error, Invalid cmd size");
@@ -137,9 +139,24 @@ static int cam_vfe_top_ver4_mux_get_base(struct cam_vfe_top_ver4_priv *top_priv,
 
 	mem_base = CAM_SOC_GET_REG_MAP_CAM_BASE(
 		top_priv->top_common.soc_info, VFE_CORE_BASE_IDX);
-	if (cdm_args->cdm_id == CAM_CDM_RT)
-		mem_base -= CAM_SOC_GET_REG_MAP_CAM_BASE(
-			top_priv->top_common.soc_info, RT_BASE_IDX);
+	if (cdm_args->cdm_id == CAM_CDM_RT) {
+		soc_private = top_priv->top_common.soc_info->soc_private;
+		if (!soc_private)
+			return -EINVAL;
+
+		rt_base = soc_private->rt_wrapper_base;
+		/* Older DTs expose the wrapper as a real register map. */
+		if (!rt_base && top_priv->top_common.soc_info->num_reg_map > RT_BASE_IDX)
+			rt_base = CAM_SOC_GET_REG_MAP_CAM_BASE(
+				top_priv->top_common.soc_info, RT_BASE_IDX);
+		if (!rt_base || rt_base == (uint32_t)-1 ||
+			mem_base == (uint32_t)-1 || mem_base < rt_base) {
+			CAM_ERR(CAM_ISP, "Invalid RT base: core 0x%x wrapper 0x%x",
+				mem_base, rt_base);
+			return -EINVAL;
+		}
+		mem_base -= rt_base;
+	}
 
 	CAM_DBG(CAM_ISP, "core %d mem_base 0x%x, cdm_id: %u",
 		top_priv->top_common.soc_info->index, mem_base,
